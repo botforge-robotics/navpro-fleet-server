@@ -1,0 +1,22 @@
+{
+  "name": "rmf-dashboard-framework",
+  "version": "0.3.0",
+  "description": "RMF dashboard framework (NavPro first-party copy from open-rmf/rmf-web)",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "exports": {
+    "./components": "./src/components/index.ts",
+    "./hooks": "./src/hooks/index.ts",
+    "./micro-apps": "./src/micro-apps/index.ts",
+    "./services": "./src/services/index.ts"
+  },
+  "peerDependencies": {
+    "api-client": "*",
+    "rmf-models": "*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router": "^6.14.1",
+    "react-router-dom": "^6.14.1"
+  }
+}

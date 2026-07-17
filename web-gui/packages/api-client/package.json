@@ -1,0 +1,21 @@
+{
+  "name": "api-client",
+  "version": "0.3.0",
+  "description": "API client library for RMF api-server (NavPro first-party copy from open-rmf/rmf-web)",
+  "license": "Apache-2.0",
+  "main": "./lib/index.ts",
+  "browser": "./lib/index.ts",
+  "types": "./lib/index.ts",
+  "exports": {
+    ".": "./lib/index.ts"
+  },
+  "dependencies": {
+    "@types/debug": "^4.1.13",
+    "debug": "^4.4.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "peerDependencies": {
+    "axios": "^1.7.0"
+  },
+  "files": ["lib/", "schema/"]
+}

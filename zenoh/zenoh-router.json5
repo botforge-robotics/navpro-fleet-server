@@ -1,0 +1,84 @@
+// zenoh-bridge-ros2dds ROUTER configuration for the NavPro fleet server.
+//
+// Robots run zenoh-bridge-ros2dds in CLIENT mode (config lives in the robot
+// workspace, see README.md) and connect to this router at tcp/<server-ip>:7447.
+// The free_fleet_adapter / navpro-rmf-adapter opens a native zenoh CLIENT
+// session against this same router.
+//
+// Version pin: zenoh-plugin-ros2dds 1.5.0 (matches free_fleet jazzy branch
+// requirement and the eclipse-zenoh==1.5.0 python client used by the adapter).
+//
+// NOTE on enforcement scope: the ros2dds `allow` / `pub_max_frequencies`
+// sections govern what THIS bridge routes between zenoh and its local DDS
+// domain (which is empty inside the router container -- defense in depth).
+// The authoritative per-robot filtering/rate-limiting happens in each robot's
+// client bridge config; keep both lists in sync. Router-level per-key ACLs
+// (zenoh `access_control`) are the future hardening hook once robot identities
+// (certs) are provisioned.
+{
+  mode: "router",
+
+  listen: {
+    endpoints: ["tcp/0.0.0.0:7447"],
+  },
+  connect: {
+    endpoints: [],
+  },
+
+  scouting: {
+    // No multicast scouting on the server LAN; robots connect explicitly.
+    multicast: {
+      enabled: false,
+    },
+    gossip: {
+      enabled: true,
+    },
+  },
+
+  plugins: {
+    ros2dds: {
+      nodename: "navpro_zenoh_router_bridge",
+      // Isolated DDS domain inside the router container; nothing else lives
+      // there. Keeps accidental DDS traffic out even if the container's
+      // network namespace ever changes.
+      domain: 99,
+
+      // Only the interfaces RMF needs from robots may cross the bridge.
+      // Robot-side bridges are namespaced with the robot name, hence the
+      // ".*/" prefixes (matches "<robot>/<topic>").
+      allow: {
+        publishers: [
+          ".*/amcl_pose",
+          ".*/battery_state",   // key expected by free_fleet Nav2RobotAdapter
+          ".*/battery/state",   // NavProMini native battery topic (relay/remap)
+          ".*/robot_mode",
+          ".*/tf",
+          ".*/tf_static",
+          ".*/map",
+          ".*/odom",
+          ".*/heartbeat",
+        ],
+        subscribers: [],
+        service_servers: [],
+        service_clients: [],
+        action_servers: [
+          ".*/navigate_to_pose",
+        ],
+        action_clients: [],
+      },
+
+      // "<regex>=<max Hz>" -- downsampled when the source publishes faster.
+      pub_max_frequencies: [
+        ".*/amcl_pose=5",
+        ".*/tf=10",
+        ".*/tf_static=1",
+        ".*/battery_state=1",
+        ".*/battery/state=1",
+        ".*/robot_mode=2",
+        ".*/odom=5",
+        ".*/map=0.2",
+        ".*/heartbeat=1",
+      ],
+    },
+  },
+}

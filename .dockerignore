@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.git
+**/.env
+**/.env.*
+**/*.log
+**/.DS_Store
+keys/*.pem
+keys/*.key
+site/**
+postgres/data
+redis/**/data
+*.md
+!web-gui/NOTICE

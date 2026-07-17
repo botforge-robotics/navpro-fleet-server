@@ -1,0 +1,240 @@
+# NavPro Fleet Server - full platform stack.
+#
+# Network mode is an EXPLICIT decision (see docs/SPIKES.md, spike 4):
+#   - One bridge network ("fleet") for all services.
+#   - zenoh is plain TCP: the router publishes 7447; robots connect to <LAN_IP>:7447.
+#   - ALL RMF ROS 2 nodes live in the single rmf-core container, so DDS discovery
+#     stays container-local (ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST).
+#   - rmf-api-server shares rmf-core's network namespace for its ROS side.
+#   - Fallback (only if spike 4 fails on a real LAN): move zenoh-router/rmf-core
+#     to network_mode: host; everything else stays on the bridge.
+#
+# Deferred, demand-driven services are at the bottom, commented out.
+
+name: navpro-fleet
+
+services:
+  # ---------------------------------------------------------------- data tier
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-navpro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-navpro}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-navpro}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [fleet]
+
+  # Split Redis roles: cache wants LRU + no persistence, streams want durability.
+  redis-cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    volumes:
+      - ./redis/redis-cache.conf:/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [fleet]
+
+  redis-streams:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    volumes:
+      - ./redis/redis-streams.conf:/etc/redis/redis.conf:ro
+      - redis-streams-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [fleet]
+
+  # ------------------------------------------------------------ RMF + zenoh
+  zenoh-router:
+    build: ./zenoh
+    image: navpro/zenoh-router:1.5.0
+    restart: unless-stopped
+    ports:
+      - "7447:7447"          # robots connect to <LAN_IP>:7447 (plain TCP)
+    volumes:
+      # Config is baked into the image; this mount allows overriding without
+      # a rebuild.
+      - ./zenoh/zenoh-router.json5:/zenoh/zenoh-router.json5:ro
+    networks: [fleet]
+
+  # Build-only base image: rmf-core (Open-RMF Jazzy + free_fleet). The runtime
+  # container is rmf-core below, whose image layers the navpro adapter on top.
+  # Build order matters:
+  #   docker compose --profile build-only build rmf-base && docker compose build
+  rmf-base:
+    build: ./rmf
+    image: navpro/rmf-core:jazzy
+    profiles: [build-only]
+
+  rmf-core:
+    build: ./rmf-adapter     # FROM navpro/rmf-core:jazzy + navpro adapter pkg
+    image: navpro/rmf-adapter:jazzy
+    restart: unless-stopped
+    environment:
+      FLEET_NAME: ${FLEET_NAME:-navpro}
+      USE_SIM_TIME: "false"
+      FLEET_ADAPTER: navpro           # navpro | free_fleet | none
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-77}
+      PLATFORM_API_URL: http://platform-api:8080
+      PLATFORM_PROVISIONING_TOKEN: ${PROVISIONING_TOKEN:?set in .env}
+      NAVPRO_REGISTRY_POLL_INTERVAL: "5"
+    volumes:
+      - ./site:/site:ro
+    depends_on:
+      zenoh-router:
+        condition: service_started
+    networks: [fleet]
+
+  rmf-api-server:
+    build: ./rmf/api-server
+    image: navpro/rmf-api-server:jazzy
+    restart: unless-stopped
+    # Shares rmf-core's network namespace so its ROS 2 side stays
+    # container-local (see docs/SPIKES.md spike 4). Reached by other services
+    # via rmf-core:8000.
+    network_mode: "service:rmf-core"
+    environment:
+      RMF_API_SERVER_DB_URL: postgres://${POSTGRES_USER:-navpro}:${POSTGRES_PASSWORD}@postgres:5432/rmf_api
+      RMF_API_SERVER_PUBLIC_URL: http://${LAN_IP:-localhost}/rmf
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ./keys:/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # --------------------------------------------------------------- platform
+  platform-api:
+    build: ./platform-api
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-navpro}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-navpro}
+      REDIS_CACHE_URL: redis://redis-cache:6379
+      REDIS_STREAMS_URL: redis://redis-streams:6379
+      # Override for GUI+demo bridge: RMF_API_SERVER_URL=http://172.19.0.1:8000
+      RMF_API_SERVER_URL: ${RMF_API_SERVER_URL:-http://rmf-core:8000}
+      SITE_DIR: /site
+      JWT_PRIVATE_KEY_PATH: /keys/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /keys/jwt-public.pem
+      JWT_ISS: navpro-platform
+      JWT_AUD: rmf_api_server
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set in .env}
+      PROVISIONING_TOKEN: ${PROVISIONING_TOKEN:?set in .env}
+    volumes:
+      - ./site:/site
+      - ./keys:/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-streams:
+        condition: service_healthy
+    networks: [fleet]
+
+  # ---------------------------------------------------------------- ingress
+  # GUI (./web-gui) is baked into this nginx image. Serves static SPA
+  # and proxies /api /rmf /editor /grafana. HTTP on :80 for LAN.
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    image: navpro/fleet-web:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    extra_hosts:
+      # Reach host schedule_visualizer (:8006) for robot path trajectories.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - platform-api
+      - grafana
+      - traffic-editor
+    networks: [fleet]
+
+  # Official Open-RMF traffic-editor GUI (Qt) exposed via noVNC in the Building tab.
+  # https://github.com/open-rmf/rmf_traffic_editor
+  traffic-editor:
+    build: ./traffic-editor
+    image: navpro/traffic-editor:jazzy
+    restart: unless-stopped
+    volumes:
+      - ./site:/site
+    networks: [fleet]
+
+  # ----------------------------------------------------------- observability
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [fleet]
+
+  loki:
+    image: grafana/loki:3.1.0
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    networks: [fleet]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set in .env}
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: [prometheus, loki]
+    networks: [fleet]
+
+  # MQTT broker for door/lift hardware adapters (Devices → Link hardware → MQTT).
+  mosquitto:
+    profiles: ["mqtt"]
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports: ["1883:1883"]
+    networks: [fleet]
+
+  # watchtower:                    # Optional automatic image updates.
+  #   image: containrrr/watchtower
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  fleet:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redis-streams-data:
+  prometheus-data:
+  loki-data:
+  grafana-data:

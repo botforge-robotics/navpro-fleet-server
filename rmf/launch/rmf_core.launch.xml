@@ -1,0 +1,114 @@
+<?xml version='1.0' ?>
+
+<!--
+  NavPro rmf-core bringup: every RMF ROS 2 node in one container.
+  Modeled on rmf_demos common.launch.xml (jazzy), minus visualization.
+
+  Started by /rmf/entrypoint.sh, which computes the file-existence guards
+  (launch XML cannot test for file presence) and maps env vars to args.
+-->
+<launch>
+  <arg name="use_sim_time" default="false"
+       description="Use the /clock topic for time to sync with simulation"/>
+  <arg name="fleet_name" default="navpro"
+       description="Fleet name; selects /site/fleet_config/(fleet_name).yaml"/>
+  <arg name="building_config_file" default="/site/building.yaml"
+       description="Building description file for rmf_building_map_tools"/>
+  <arg name="use_building_map" default="true"
+       description="Set false when building_config_file does not exist yet"/>
+  <arg name="fleet_config_file" default="/site/fleet_config/navpro.yaml"
+       description="free_fleet / EasyFullControl fleet configuration"/>
+  <arg name="nav_graph_file" default="/site/nav_graphs/0.yaml"
+       description="Navigation graph for this fleet"/>
+  <arg name="server_uri" default=""
+       description="rmf-web api-server internal websocket, e.g. ws://localhost:8000/_internal"/>
+  <arg name="start_fleet_adapter" default="true"
+       description="Set false when fleet config / nav graph are not generated yet"/>
+  <arg name="use_navpro_adapter" default="false"
+       description="true: run navpro_rmf_adapter (registry-poll dynamic add);
+                    false: run stock free_fleet_adapter (static fleet config)"/>
+  <arg name="zenoh_config_file" default="/rmf/config/zenoh-client.json5"
+       description="Zenoh client session config pointing at the zenoh router"/>
+  <arg name="bidding_time_window" default="2.0"
+       description="Time window in seconds for task bidding process"/>
+  <arg name="use_unique_hex_string_with_task_id" default="true"
+       description="Appends a unique hex string to the task ID"/>
+
+  <!-- Traffic Schedule -->
+  <node pkg="rmf_traffic_ros2" exec="rmf_traffic_schedule" output="both"
+        name="rmf_traffic_schedule_primary">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- Blockade Moderator -->
+  <node pkg="rmf_traffic_ros2" exec="rmf_traffic_blockade" output="both">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- Building Map Server (skipped until the platform generates /site/building.yaml) -->
+  <group if="$(var use_building_map)">
+    <node pkg="rmf_building_map_tools" exec="building_map_server"
+          args="$(var building_config_file)" output="both">
+      <param name="use_sim_time" value="$(var use_sim_time)"/>
+    </node>
+  </group>
+
+  <!-- Task Dispatcher -->
+  <node pkg="rmf_task_ros2" exec="rmf_task_dispatcher" output="both">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+    <param name="bidding_time_window" value="$(var bidding_time_window)"/>
+    <param name="use_unique_hex_string_with_task_id"
+           value="$(var use_unique_hex_string_with_task_id)"/>
+    <param name="server_uri" value="$(var server_uri)"/>
+  </node>
+
+  <!-- Door Supervisor -->
+  <node pkg="rmf_fleet_adapter" exec="door_supervisor" output="both">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- Lift Supervisor -->
+  <node pkg="rmf_fleet_adapter" exec="lift_supervisor" output="both">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- Mutex Group Supervisor -->
+  <node pkg="rmf_fleet_adapter" exec="mutex_group_supervisor" output="both">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+  </node>
+
+  <!-- Fleet adapter -->
+  <group if="$(var start_fleet_adapter)">
+    <let name="use_sim_time_flag" if="$(var use_sim_time)" value=" -sim"/>
+    <let name="use_sim_time_flag" unless="$(var use_sim_time)" value=""/>
+
+    <!-- Production path: navpro_rmf_adapter (EasyFullControl + registry-poll
+         dynamic robot add). Only available when the navpro-rmf-adapter
+         python package is installed (navpro/rmf-adapter image). Configured
+         via NAVPRO_* / PLATFORM_API_* env vars, see rmf-adapter/README.md. -->
+    <group if="$(var use_navpro_adapter)">
+      <executable cmd="python3 -m navpro_rmf_adapter" output="both">
+        <env name="NAVPRO_FLEET_NAME" value="$(var fleet_name)"/>
+        <env name="NAVPRO_FLEET_CONFIG" value="$(var fleet_config_file)"/>
+        <env name="NAVPRO_NAV_GRAPH" value="$(var nav_graph_file)"/>
+        <env name="NAVPRO_SERVER_URI" value="$(var server_uri)"/>
+        <env name="NAVPRO_ZENOH_CONFIG" value="$(var zenoh_config_file)"/>
+        <env name="NAVPRO_USE_SIM_TIME" value="$(var use_sim_time)"/>
+      </executable>
+    </group>
+
+    <!-- Fallback path: stock free_fleet_adapter, static fleet config only
+         (robots listed in the YAML at startup; no dynamic add). -->
+    <group unless="$(var use_navpro_adapter)">
+      <!-- -s is kept last (upstream fleet_adapter.launch.xml pattern) so an
+           empty server_uri cannot swallow the following option token. The
+           entrypoint always passes a non-empty SERVER_URI. -->
+      <node pkg="free_fleet_adapter" exec="fleet_adapter.py"
+            args="-c $(var fleet_config_file) -n $(var nav_graph_file) --zenoh-config $(var zenoh_config_file) -s $(var server_uri)$(var use_sim_time_flag)"
+            output="both">
+        <param name="use_sim_time" value="$(var use_sim_time)"/>
+        <param name="server_uri" value="$(var server_uri)"/>
+      </node>
+    </group>
+  </group>
+</launch>

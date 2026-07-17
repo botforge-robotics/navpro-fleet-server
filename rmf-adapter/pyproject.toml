@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "navpro-rmf-adapter"
+version = "0.1.0"
+description = "EasyFullControl RMF fleet adapter with NavPro registry-driven dynamic robot add"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.12"
+# Pip-installable deps only. The following are provided by the runtime
+# environment (navpro/rmf-core image) and are NOT pip-installable:
+#   - rclpy, tf2_ros            (ROS 2 Jazzy)
+#   - rmf_adapter               (ros-jazzy-rmf-fleet-adapter-python)
+#   - free_fleet, free_fleet_adapter (/opt/ff_ws, built from source)
+# Version pins mirror rmf/Dockerfile; bump together.
+dependencies = [
+    "httpx==0.27.2",
+    "PyYAML>=6.0,<7",
+    "eclipse-zenoh==1.5.0",
+    "nudged==0.3.1",
+]
+
+[project.scripts]
+navpro-rmf-adapter = "navpro_rmf_adapter.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["navpro_rmf_adapter*"]

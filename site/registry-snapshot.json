@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-07-17T18:46:48.558Z",
+  "fleets": [],
+  "robots": [],
+  "levels": [],
+  "buildings": [
+    {
+      "id": "a04c8da5-3d77-43cd-b26c-3c01a13b6190",
+      "name": "site",
+      "meta": {},
+      "graph": {
+        "waypoints": [],
+        "lanes": [],
+        "doors": [],
+        "lifts": []
+      }
+    }
+  ],
+  "devices": []
+}

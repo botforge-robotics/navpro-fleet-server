@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: navpro
+    orgId: 1
+    folder: NavPro Fleet
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards
