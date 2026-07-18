@@ -1,9 +1,7 @@
-import Box from '@mui/material/Box';
 import type { ReactElement, ReactNode } from 'react';
 import {
   InitialWindow,
   LocallyPersistentWorkspace,
-  Map,
   RmfDashboard,
   Workspace,
 } from 'rmf-dashboard-framework/components';
@@ -16,8 +14,10 @@ import {
   tasksApp,
 } from 'rmf-dashboard-framework/micro-apps';
 import { OpsWorkspaceShell, PlatformShell } from './components/PlatformShell';
+import { HelpGuideButton } from './help/HelpGuideButton';
 import { BuildingEditorPage } from './pages/BuildingEditorPage';
 import { DevicesPage } from './pages/DevicesPage';
+import { MapTab } from './pages/MapTab';
 import { MappingPage } from './pages/MappingPage';
 import { MissionsPage } from './pages/MissionsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -51,29 +51,16 @@ const tasksWorkspace: InitialWindow[] = [
   { layout: { x: 8, y: 0, w: 5, h: 8 }, microApp: mapApp },
 ];
 
-function platformTab(element: ReactNode, wide = false): ReactElement {
-  return <PlatformShell wide={wide}>{element}</PlatformShell>;
+function platformTab(element: ReactNode, wide = false, fill = false): ReactElement {
+  return (
+    <PlatformShell wide={wide} fill={fill}>
+      {element}
+    </PlatformShell>
+  );
 }
 
 function opsTab(element: ReactNode): ReactElement {
   return <OpsWorkspaceShell>{element}</OpsWorkspaceShell>;
-}
-
-/** Map tab: full area under the navbar — no nested "Map" window chrome. */
-function FullBleedMapTab(): ReactElement {
-  return (
-    <Box
-      sx={{
-        height: 'calc(100vh - 3.5rem)',
-        width: '100%',
-        position: 'relative',
-        overflow: 'hidden',
-        bgcolor: 'background.default',
-      }}
-    >
-      <Map {...mapConfig} />
-    </Box>
-  );
 }
 
 const TASKS = {
@@ -101,11 +88,12 @@ export function DashboardRoot(): ReactElement {
       authenticator={authenticator}
       resources={{ fleets: {}, logos: { header: '/vite.svg' } }}
       tasks={TASKS}
+      extraAppbarItems={<HelpGuideButton />}
       tabs={[
         {
           name: 'Map',
           route: '',
-          element: <FullBleedMapTab />,
+          element: <MapTab />,
         },
         {
           name: 'Overview',
@@ -135,7 +123,7 @@ export function DashboardRoot(): ReactElement {
         {
           name: 'Building',
           route: 'building',
-          element: platformTab(<BuildingEditorPage />, true),
+          element: platformTab(<BuildingEditorPage />, true, true),
         },
         { name: 'Devices', route: 'devices', element: platformTab(<DevicesPage />, true) },
         { name: 'Settings', route: 'settings', element: platformTab(<SettingsPage />) },

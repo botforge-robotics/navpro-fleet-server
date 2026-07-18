@@ -9,7 +9,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../api/client';
+import { ApiError, api } from '../api/client';
 import type { Device, DeviceType } from '../api/types';
 import { JsonView } from '../components/JsonView';
 import { PageHeader } from '../components/PageHeader';
@@ -386,6 +386,12 @@ export function DevicesPage(): ReactElement {
       );
       setLiftStates(nextLifts);
     } catch (err) {
+      setBuildingMap(null);
+      // RMF returns FastAPI 404 until building_map_server publishes a map.
+      if (err instanceof ApiError && err.status === 404) {
+        setRmfError(null);
+        return;
+      }
       setRmfError(err instanceof Error ? err.message : String(err));
     }
   }, []);
@@ -526,10 +532,12 @@ export function DevicesPage(): ReactElement {
       {registryError !== null && <Alert severity="warning" sx={{ mb: 2 }}>{registryError}</Alert>}
       {rmfError !== null && <Alert severity="error" sx={{ mb: 2 }}>{rmfError}</Alert>}
       {grouped.length === 0 && (
-        <Typography color="text.secondary">
-          No devices yet. Doors and lifts appear when a building map is loaded from RMF.
-          Chargers and cameras need platform registration.
-        </Typography>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          No building hardware yet. Open the <strong>Building</strong> tab, save a map with
+          doors/lifts/chargers, click <strong>Apply to fleet</strong>, then wait a few seconds
+          (RMF must load <code>site/*.building.yaml</code>). Chargers and cameras can also be
+          registered as platform devices.
+        </Alert>
       )}
       {grouped.map((group) => (
         <Box key={group.type} sx={{ mb: 3 }}>

@@ -189,7 +189,8 @@ export function CommissioningSection(): ReactElement {
       {error !== null && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
       <Alert severity="info" sx={{ mb: 2 }}>
         First power-on: join the robot hotspot <strong>NavPro-Setup-XXXX</strong>, open{' '}
-        <code>http://10.42.0.1/</code>, enter site Wi-Fi and name. Then return here to Activate.
+        <code>http://10.42.0.1/</code>, enter site Wi‑Fi, robot name, server IP, and provisioning
+        token. Fleet and floor are chosen here when you Commission (robots can move between floors).
       </Alert>
 
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>

@@ -35,13 +35,38 @@ SERVER_URI="${SERVER_URI:-ws://localhost:8000/_internal}"
 ZENOH_CONFIG="${ZENOH_CONFIG:-/rmf/config/zenoh-client.json5}"
 SITE_DIR="${SITE_DIR:-/site}"
 
-BUILDING_CONFIG="${SITE_DIR}/building.yaml"
+# RMF building_map_server ONLY accepts paths ending in *.building.yaml
+# (plain "building.yaml" fatals: "unknown filename suffix" → /rmf/building_map 404).
+# site/ is often mounted :ro — do not write here; platform-api materializes
+# site.building.yaml alongside building.yaml.
+resolve_building_config() {
+  local site="${1}"
+  if compgen -G "${site}/*.building.yaml" > /dev/null; then
+    # shellcheck disable=SC2012
+    ls -1 "${site}"/*.building.yaml | head -1
+    return 0
+  fi
+  # Legacy name only — cannot start building_map_server with this path.
+  if [[ -f "${site}/building.yaml" ]]; then
+    echo "[rmf-core] ERROR: ${site}/building.yaml exists but RMF requires" \
+         "*.building.yaml. Re-save via Building → Apply to fleet, or:" >&2
+    echo "  cp site/building.yaml site/site.building.yaml && docker compose restart rmf-core" >&2
+  fi
+  return 1
+}
+
+BUILDING_CONFIG=""
+if BUILDING_CONFIG="$(resolve_building_config "${SITE_DIR}")"; then
+  :
+else
+  BUILDING_CONFIG="${SITE_DIR}/site.building.yaml"
+fi
 FLEET_CONFIG="${SITE_DIR}/fleet_config/${FLEET_NAME}.yaml"
 NAV_GRAPH="${SITE_DIR}/nav_graphs/0.yaml"
 
 use_building_map=true
 if [ ! -f "${BUILDING_CONFIG}" ]; then
-  echo "[rmf-core] WARNING: ${BUILDING_CONFIG} not found;" \
+  echo "[rmf-core] WARNING: no *.building.yaml under ${SITE_DIR};" \
        "building_map_server will NOT be started." >&2
   use_building_map=false
 fi

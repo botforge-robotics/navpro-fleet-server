@@ -48,6 +48,8 @@ declare module 'rmf-dashboard-framework/components' {
     baseUrl?: string;
     embeddedContent?: ReactNode;
     disableRouter?: boolean;
+    /** Always shown in the app bar before the profile icon. */
+    extraAppbarItems?: ReactNode;
   }
 
   export const RmfDashboard: React.ComponentType<RmfDashboardProps>;

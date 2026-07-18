@@ -5,13 +5,19 @@ by the Platform API from the Registry** (PostgreSQL) - never hand-edited.
 
 ```
 site/
-  building.yaml          # RMF building map (imported/generated)
+  site.building.yaml     # RMF building map (*.building.yaml required by building_map_server)
+  building.yaml          # legacy/compat copy (traffic-editor may save this name)
   nav_graphs/            # generated per-fleet nav graphs (0.yaml, ...)
   fleet_config/          # free_fleet_adapter config per fleet (<fleet>.yaml)
   maps/                  # occupancy maps + visual floorplans per level
   ota/                   # OTA artifacts by channel (pi/, esp32/, config/)
   registry-snapshot.json # last generation input snapshot (debugging/restore)
 ```
+
+> **Important:** Open-RMF `building_map_server` rejects plain `building.yaml`
+> (`unknown filename suffix`). The platform always writes `site.building.yaml`
+> as well. Without that file, Devices → Building hardware shows empty and
+> `/rmf/building_map` returns 404.
 
 Workflow:
 

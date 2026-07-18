@@ -35,6 +35,7 @@ function requireAuthOrProvisioning(req: Request, _res: Response, next: NextFunct
   next(new HttpError(401, "auth required"));
 }
 import { graphToBuildingYaml } from "./building-yaml";
+import { resolveBuildingYamlPath, writeBuildingYamlFiles } from "./building-files";
 
 function safeSiteRel(rel: string): string {
   const normalized = path.normalize(rel).replace(/^(\.\.(\/|\\|$))+/, "");
@@ -61,23 +62,23 @@ async function writeBuildingFromRegistry(): Promise<{ buildings: string[] }> {
       building.graph.lifts.length > 0;
     if (!hasGraph) continue;
     const yamlText = graphToBuildingYaml(building.name, building.graph);
-    const outPath = path.join(config.siteDir, "building.yaml");
-    const tmp = `${outPath}.tmp-${process.pid}-${Date.now()}`;
-    await fs.mkdir(config.siteDir, { recursive: true });
-    await fs.writeFile(tmp, yamlText, "utf8");
-    await fs.rename(tmp, outPath);
+    await writeBuildingYamlFiles(yamlText);
     written.push(building.name);
   }
   return { buildings: written };
 }
 
 async function tryGenerateNavGraphs(): Promise<{ ok: boolean; detail?: string }> {
-  const buildingPath = path.join(config.siteDir, "building.yaml");
-  try {
-    await fs.access(buildingPath);
-  } catch {
-    return { ok: false, detail: "no building.yaml" };
+  const buildingPath = await resolveBuildingYamlPath();
+  if (buildingPath === null) {
+    return { ok: false, detail: "no building.yaml / *.building.yaml" };
   }
+  // Nav tools also expect *.building.yaml — sync legacy → RMF name if needed.
+  if (!buildingPath.endsWith(".building.yaml")) {
+    const text = await fs.readFile(buildingPath, "utf8");
+    await writeBuildingYamlFiles(text);
+  }
+  const navBuildingPath = (await resolveBuildingYamlPath()) ?? buildingPath;
   const navOut = path.join(config.siteDir, "nav_graphs");
   await fs.mkdir(navOut, { recursive: true });
   try {
@@ -86,7 +87,7 @@ async function tryGenerateNavGraphs(): Promise<{ ok: boolean; detail?: string }>
     const execFileAsync = promisify(execFile);
     await execFileAsync(
       "ros2",
-      ["run", "rmf_building_map_tools", "building_map_generator", "nav", buildingPath, navOut],
+      ["run", "rmf_building_map_tools", "building_map_generator", "nav", navBuildingPath, navOut],
       { timeout: 120_000, env: process.env },
     );
     return { ok: true };
@@ -196,9 +197,7 @@ siteRouter.post(
     const name =
       (typeof parsed.name === "string" && parsed.name) || body.buildingName || "imported";
 
-    const outPath = path.join(config.siteDir, "building.yaml");
-    await fs.mkdir(config.siteDir, { recursive: true });
-    await fs.writeFile(outPath, yamlText, "utf8");
+    await writeBuildingYamlFiles(yamlText);
 
     const { rows } = await pool.query(
       `INSERT INTO buildings (name, meta)
@@ -247,7 +246,7 @@ siteRouter.post(
 );
 
 /**
- * After saving from the official traffic-editor into /site/building.yaml,
+ * After saving from the official traffic-editor into /site/,
  * regenerate nav graphs + fleet config from the on-disk file.
  */
 siteRouter.post(
@@ -256,16 +255,14 @@ siteRouter.post(
   requireRole("supervisor"),
   auditMutations,
   asyncHandler(async (_req, res) => {
-    const buildingPath = path.join(config.siteDir, "building.yaml");
-    try {
-      await fs.access(buildingPath);
-    } catch {
-      // Fall back to first *.building.yaml
-      const entries = await fs.readdir(config.siteDir);
-      const match = entries.find((e) => e.endsWith(".building.yaml"));
-      if (match === undefined) throw new HttpError(404, "no building.yaml in site/");
-      const src = path.join(config.siteDir, match);
-      await fs.copyFile(src, buildingPath);
+    let buildingPath = await resolveBuildingYamlPath();
+    if (buildingPath === null) {
+      throw new HttpError(404, "no building.yaml / *.building.yaml in site/");
+    }
+    // Ensure RMF-compatible suffix exists (traffic-editor may save building.yaml only).
+    if (!buildingPath.endsWith(".building.yaml")) {
+      await writeBuildingYamlFiles(await fs.readFile(buildingPath, "utf8"));
+      buildingPath = (await resolveBuildingYamlPath()) ?? buildingPath;
     }
 
     let parsed: Record<string, unknown> = {};

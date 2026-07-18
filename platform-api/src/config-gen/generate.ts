@@ -130,9 +130,11 @@ export async function generateSite(): Promise<{ fleets: string[] }> {
 
   logger.info("site artifacts generated", { fleets: written });
 
-  // Also materialize building.yaml when any building has an in-browser graph.
+  // Materialize site.building.yaml (+ legacy building.yaml) when any building
+  // has an in-browser graph. RMF requires the *.building.yaml suffix.
   try {
     const { graphToBuildingYaml } = await import("../site/building-yaml");
+    const { writeBuildingYamlFiles } = await import("../site/building-files");
     for (const building of buildings) {
       const hasGraph =
         building.graph.waypoints.length > 0 ||
@@ -141,8 +143,8 @@ export async function generateSite(): Promise<{ fleets: string[] }> {
         building.graph.lifts.length > 0;
       if (!hasGraph) continue;
       const yamlText = graphToBuildingYaml(building.name, building.graph);
-      await writeFileAtomic(path.join(config.siteDir, "building.yaml"), yamlText);
-      break; // single active building.yaml for the site volume
+      await writeBuildingYamlFiles(yamlText);
+      break;
     }
   } catch (err) {
     logger.warn("building.yaml materialize skipped", errorFields(err));

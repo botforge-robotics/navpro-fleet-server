@@ -1,0 +1,231 @@
+/* NavPro Fleet operator help guide — uses theme CSS variables from uidesign.json */
+
+.navpro-help-drawer .MuiDrawer-paper {
+  width: min(720px, 100vw);
+  max-width: 100%;
+  background: var(--mui-palette-background-paper, #12141a);
+  color: var(--mui-palette-text-primary, #e8eaed);
+}
+
+.navpro-help {
+  padding: 0 0 48px;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: inherit;
+}
+
+.navpro-help__header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--mui-palette-background-paper, #12141a);
+}
+
+.navpro-help__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.navpro-help__body {
+  padding: 20px 24px;
+}
+
+.navpro-help__lead {
+  margin: 0 0 20px;
+  color: var(--mui-palette-text-secondary, #9aa0a6);
+  line-height: 1.6;
+}
+
+.navpro-help__toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 28px;
+  padding: 0;
+  list-style: none;
+}
+
+.navpro-help__toc a {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--mui-palette-primary-light, #60a5fa);
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.navpro-help__toc a:hover {
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.navpro-help section {
+  margin: 0 0 32px;
+  scroll-margin-top: 72px;
+}
+
+.navpro-help h2 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.navpro-help h3 {
+  margin: 18px 0 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.navpro-help p {
+  margin: 0 0 12px;
+}
+
+.navpro-help ol,
+.navpro-help ul {
+  margin: 0 0 12px;
+  padding-left: 1.25rem;
+}
+
+.navpro-help li {
+  margin-bottom: 6px;
+}
+
+.navpro-help__callout {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border-left: 3px solid var(--mui-palette-primary-main, #3b82f6);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.navpro-help__callout--warn {
+  border-left-color: var(--mui-palette-warning-main, #fbbf24);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.navpro-help__callout strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.navpro-help table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 16px;
+  font-size: 0.8125rem;
+}
+
+.navpro-help th,
+.navpro-help td {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.navpro-help th {
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+}
+
+.navpro-help code,
+.navpro-help kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.navpro-help__steps {
+  counter-reset: help-step;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+
+.navpro-help__steps > li {
+  position: relative;
+  padding: 12px 12px 12px 48px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.navpro-help__steps > li::before {
+  counter-increment: help-step;
+  content: counter(help-step);
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--mui-palette-primary-main, #3b82f6);
+}
+
+.navpro-help__diagram {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.25);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.navpro-help__checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+
+.navpro-help__checklist li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 8px;
+}
+
+.navpro-help__checklist li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.35em;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+}
+
+.navpro-help__ref {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  background: rgba(52, 211, 153, 0.06);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}

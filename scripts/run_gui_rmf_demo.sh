@@ -10,7 +10,8 @@
 #   4. Launches the office Gazebo demo with server_uri → api-server
 #
 # Usage:
-#   ./scripts/run_gui_rmf_demo.sh              # start and leave running
+#   ./scripts/run_gui_rmf_demo.sh              # start headless (leave running)
+#   HEADLESS=false ./scripts/run_gui_rmf_demo.sh   # Gazebo + RViz windows
 #   ./scripts/run_gui_rmf_demo.sh stop         # tear down demo bridge
 #   ./scripts/run_gui_rmf_demo.sh status       # curl building_map + fleets
 set -euo pipefail
@@ -26,6 +27,8 @@ DOMAIN_ID="${ROS_DOMAIN_ID_DEMO:-42}"
 HOST_GW="${RMF_DEMO_HOST_GW:-172.19.0.1}"
 SERVER_URI="${SERVER_URI:-ws://127.0.0.1:8000/_internal}"
 LAUNCH_XML="${ROOT}/scripts/gui_demo_office.launch.xml"
+# true = gz -s (no GUI); false = open Gazebo + RViz for visual testing
+HEADLESS="${HEADLESS:-true}"
 
 dc() { sg docker -c "docker compose -f '${COMPOSE_FILE}' $*"; }
 
@@ -202,8 +205,12 @@ launch_and_wait() {
   export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
   export ROS_DOMAIN_ID="${DOMAIN_ID}"
 
+  # DISPLAY must be set for Gazebo/RViz when HEADLESS=false
+  export DISPLAY="${DISPLAY:-:0}"
+  echo "[gui-demo] headless=${HEADLESS} DISPLAY=${DISPLAY}"
+
   ros2 launch "${LAUNCH_XML}" \
-    use_sim_time:=true headless:=true \
+    use_sim_time:=true headless:="${HEADLESS}" \
     server_uri:="${SERVER_URI}" \
     >"${LOG_DIR}/launch.log" 2>&1 &
   echo $! >"${LOG_DIR}/launch.pid"
@@ -257,6 +264,9 @@ launch_and_wait() {
   echo ""
   echo "[gui-demo] GUI: http://${LAN_IP}/  (${ADMIN_USERNAME} / ${ADMIN_PASSWORD})"
   echo "[gui-demo] Open Map / Robots / Tasks. Stop with: $0 stop"
+  if [[ "${HEADLESS}" != "true" ]]; then
+    echo "[gui-demo] Gazebo + RViz should be on DISPLAY=${DISPLAY}"
+  fi
   echo "[gui-demo] logs: ${LOG_DIR}"
 }
 

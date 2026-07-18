@@ -36,11 +36,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libglib2.0-0 \
         fonts-dejavu-core \
         dbus-x11 \
+        wmctrl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /site
 
 COPY entrypoint.sh /entrypoint.sh
+COPY novnc-embed.html /usr/share/novnc/navpro-embed.html
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 6080

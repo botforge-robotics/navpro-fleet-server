@@ -135,6 +135,12 @@ export interface RmfDashboardProps {
    * routes are still rendered (unlike `embeddedContent`).
    */
   disableRouter?: boolean;
+
+  /**
+   * Always-visible items rendered in the app bar before the profile icon
+   * (merged with any temporary items set via AppController).
+   */
+  extraAppbarItems?: React.ReactNode;
 }
 
 export function RmfDashboard(props: RmfDashboardProps) {
@@ -245,7 +251,15 @@ export function RmfDashboard(props: RmfDashboardProps) {
                   <AppControllerProvider value={appController}>
                     <AlertManager alertAudioPath={alertAudioPath} />
                     {props.embeddedContent ?? (
-                      <DashboardContents {...props} extraAppbarItems={extraAppbarItems} />
+                      <DashboardContents
+                        {...props}
+                        extraAppbarItems={
+                          <>
+                            {props.extraAppbarItems}
+                            {extraAppbarItems}
+                          </>
+                        }
+                      />
                     )}
                     {/* TODO: Support stacking of alerts */}
                     <Snackbar
