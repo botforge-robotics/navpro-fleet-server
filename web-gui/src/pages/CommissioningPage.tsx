@@ -2,11 +2,7 @@ import Alert from '@mui/material/Alert';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import MenuItem from '@mui/material/MenuItem';
+import CircularProgress from '@mui/material/CircularProgress';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
@@ -15,12 +11,12 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type { ReactElement } from 'react';
 import { useMemo, useState } from 'react';
 import { api } from '../api/client';
 import type { Fleet, Level, Robot } from '../api/types';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { StatusChip } from '../components/StatusChip';
 import { useFetch } from '../hooks/useFetch';
 
@@ -29,138 +25,29 @@ function needsCommissioning(robot: Robot): boolean {
   if (robot.status === 'unprovisioned') return true;
   if (robot.status !== 'active') return true;
   if (!robot.fleetId || !robot.levelId) return true;
-  if (!robot.dockWaypoint) return true;
   return false;
 }
 
-interface ActivateDialogProps {
-  robot: Robot;
-  fleets: Fleet[];
-  levels: Level[];
-  chargerNames: string[];
-  onClose: (changed: boolean) => void;
-}
-
-function ActivateDialog({
-  robot,
-  fleets,
-  levels,
-  chargerNames,
-  onClose,
-}: ActivateDialogProps): ReactElement {
-  const [name, setName] = useState(robot.name);
-  const [fleetId, setFleetId] = useState(robot.fleetId ?? fleets[0]?.id ?? '');
-  const [levelId, setLevelId] = useState(robot.levelId ?? levels[0]?.id ?? '');
-  const [dockWaypoint, setDockWaypoint] = useState(robot.dockWaypoint ?? chargerNames[0] ?? '');
-  const [homeWaypoint, setHomeWaypoint] = useState(robot.homeWaypoint ?? chargerNames[0] ?? '');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const activate = async (): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.post(`/api/v1/robots/${robot.id}/activate`, {
-        name,
-        fleetId,
-        levelId,
-        dockWaypoint,
-        homeWaypoint: homeWaypoint || undefined,
-      });
-      onClose(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog open onClose={() => onClose(false)} maxWidth="sm" fullWidth>
-      <DialogTitle>Activate {robot.name}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            Serial {robot.serial}. After Activate, the fleet adapter adds this robot to the live
-            map within ~5s.
-          </Typography>
-          <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <TextField
-            label="Fleet"
-            select
-            value={fleetId}
-            onChange={(e) => setFleetId(e.target.value)}
-          >
-            {fleets.map((f) => (
-              <MenuItem key={f.id} value={f.id}>
-                {f.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            label="Level"
-            select
-            value={levelId}
-            onChange={(e) => setLevelId(e.target.value)}
-          >
-            {levels.map((l) => (
-              <MenuItem key={l.id} value={l.id}>
-                {l.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            label="Charger waypoint"
-            select
-            value={dockWaypoint}
-            onChange={(e) => setDockWaypoint(e.target.value)}
-            helperText="Named charger vertex from the building graph"
-          >
-            {chargerNames.length === 0 && (
-              <MenuItem value={dockWaypoint || 'charger'}>{dockWaypoint || 'charger'}</MenuItem>
-            )}
-            {chargerNames.map((n) => (
-              <MenuItem key={n} value={n}>
-                {n}
-              </MenuItem>
-            ))}
-            {dockWaypoint && !chargerNames.includes(dockWaypoint) && (
-              <MenuItem value={dockWaypoint}>{dockWaypoint}</MenuItem>
-            )}
-          </TextField>
-          <TextField
-            label="Home / parking waypoint"
-            value={homeWaypoint}
-            onChange={(e) => setHomeWaypoint(e.target.value)}
-            helperText="Usually the same as charger, or a parking spot name"
-          />
-          {error !== null && <Alert severity="error">{error}</Alert>}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => onClose(false)}>Cancel</Button>
-        <Button
-          onClick={() => void activate()}
-          variant="contained"
-          disabled={busy || !fleetId || !levelId || !dockWaypoint}
-        >
-          Activate
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
+interface DecommissionResult {
+  deleted: boolean;
+  factoryResetQueued: boolean;
+  message: string;
 }
 
 /**
- * Pending robots from captive-portal register → assign fleet/level/charger → Activate into RMF.
- * Embedded under the Devices tab (not a standalone route).
+ * Pending robots from captive-portal register → one-click Commission (Activate)
+ * using fleet navpromini + floor L1. Decommission deletes from the DB and
+ * factory-resets the Pi when it is online.
  */
 export function CommissioningSection(): ReactElement {
   const { data: robots, error, reload } = useFetch<Robot[]>('/api/v1/robots');
   const { data: fleets } = useFetch<Fleet[]>('/api/v1/fleets');
   const { data: levels } = useFetch<Level[]>('/api/v1/levels');
-  const { data: buildings } = useFetch<Array<{ id: string; name: string; graph?: { waypoints?: Array<{ name: string; isCharger?: boolean }> } }>>('/api/v1/buildings');
 
-  const [selected, setSelected] = useState<Robot | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [decommissionRobot, setDecommissionRobot] = useState<Robot | null>(null);
 
   const pending = useMemo(() => (robots ?? []).filter(needsCommissioning), [robots]);
   const active = useMemo(
@@ -168,15 +55,59 @@ export function CommissioningSection(): ReactElement {
     [robots],
   );
 
-  const chargerNames = useMemo(() => {
-    const names = new Set<string>();
-    for (const b of buildings ?? []) {
-      for (const w of b.graph?.waypoints ?? []) {
-        if (w.isCharger && w.name) names.add(w.name);
-      }
+  const commission = async (robot: Robot): Promise<void> => {
+    const fleetList = fleets ?? [];
+    const levelList = levels ?? [];
+    const preferredFleet =
+      fleetList.find((f) => f.name === 'navpromini') ??
+      fleetList.find((f) => f.name === 'navpro') ??
+      fleetList[0];
+    const preferredLevel =
+      levelList.find((l) => l.name === 'L1') ?? levelList[0];
+    const fleetId = robot.fleetId ?? preferredFleet?.id;
+    const levelId = robot.levelId ?? preferredLevel?.id;
+    if (!fleetId || !levelId) {
+      setActionError(
+        'Default fleet/floor missing — wait a few seconds and refresh (server seeds navpromini + L1 on startup).',
+      );
+      return;
     }
-    return [...names].sort();
-  }, [buildings]);
+    setBusyId(robot.id);
+    setActionError(null);
+    setActionMsg(null);
+    try {
+      await api.post(`/api/v1/robots/${robot.id}/activate`, {
+        name: robot.name,
+        fleetId,
+        levelId,
+      });
+      reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const confirmDecommission = async (): Promise<void> => {
+    if (decommissionRobot === null) return;
+    const robot = decommissionRobot;
+    setDecommissionRobot(null);
+    setBusyId(robot.id);
+    setActionError(null);
+    setActionMsg(null);
+    try {
+      const result = await api.post<DecommissionResult>(
+        `/api/v1/robots/${robot.id}/decommission`,
+      );
+      setActionMsg(result.message);
+      reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -184,13 +115,29 @@ export function CommissioningSection(): ReactElement {
         Robot commissioning
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Robots appear here after hotspot Wi-Fi setup. Activate to place them on the RMF map.
+        Click <strong>Commission</strong> to activate with fleet <strong>navpromini</strong> and
+        floor <strong>L1</strong> (created automatically). Map / charger can come later.{' '}
+        <strong>Decommission</strong> deletes the robot from the fleet server; if it is online it
+        factory-resets back to the setup hotspot.
       </Typography>
-      {error !== null && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
+      {error !== null && (
+        <Alert severity="error" sx={{ mb: 1 }}>
+          {error}
+        </Alert>
+      )}
+      {actionError !== null && (
+        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setActionError(null)}>
+          {actionError}
+        </Alert>
+      )}
+      {actionMsg !== null && (
+        <Alert severity="success" sx={{ mb: 1 }} onClose={() => setActionMsg(null)}>
+          {actionMsg}
+        </Alert>
+      )}
       <Alert severity="info" sx={{ mb: 2 }}>
-        First power-on: join the robot hotspot <strong>NavPro-Setup-XXXX</strong>, open{' '}
-        <code>http://10.42.0.1/</code>, enter site Wi‑Fi, robot name, server IP, and provisioning
-        token. Fleet and floor are chosen here when you Commission (robots can move between floors).
+        First power-on: join <strong>NavPro-Setup-XXXX</strong> → <code>http://10.42.0.1/</code> →
+        Wi‑Fi, robot name, server IP, token. Then click Commission here.
       </Alert>
 
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
@@ -199,6 +146,8 @@ export function CommissioningSection(): ReactElement {
         </Badge>
         <Typography variant="body2" color="text.secondary">
           {active.length} active on fleet
+          {fleets?.[0] ? ` · default fleet: ${fleets[0].name}` : ''}
+          {levels?.[0] ? ` · floor: ${levels[0].name}` : ''}
         </Typography>
       </Stack>
 
@@ -232,9 +181,30 @@ export function CommissioningSection(): ReactElement {
                 </TableCell>
                 <TableCell>{robot.lastSeen ?? '—'}</TableCell>
                 <TableCell align="right">
-                  <Button size="small" variant="contained" onClick={() => setSelected(robot)}>
-                    Commission
-                  </Button>
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disabled={busyId !== null}
+                      onClick={() => void commission(robot)}
+                      startIcon={
+                        busyId === robot.id ? (
+                          <CircularProgress size={14} color="inherit" />
+                        ) : undefined
+                      }
+                    >
+                      Commission
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      disabled={busyId !== null}
+                      onClick={() => setDecommissionRobot(robot)}
+                    >
+                      Decommission
+                    </Button>
+                  </Stack>
                 </TableCell>
               </TableRow>
             ))}
@@ -254,6 +224,7 @@ export function CommissioningSection(): ReactElement {
               <TableCell>Charger</TableCell>
               <TableCell>Home</TableCell>
               <TableCell>Mode</TableCell>
+              <TableCell align="right">Action</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -264,7 +235,26 @@ export function CommissioningSection(): ReactElement {
                 <TableCell>{robot.dockWaypoint ?? '—'}</TableCell>
                 <TableCell>{robot.homeWaypoint ?? '—'}</TableCell>
                 <TableCell>
-                  <StatusChip label={robot.mode} tone="success" />
+                  <StatusChip
+                    label={robot.mode}
+                    tone={robot.mode === 'offline' ? 'error' : 'success'}
+                  />
+                </TableCell>
+                <TableCell align="right">
+                  <Button
+                    size="small"
+                    color="error"
+                    variant="outlined"
+                    disabled={busyId !== null}
+                    onClick={() => setDecommissionRobot(robot)}
+                    startIcon={
+                      busyId === robot.id ? (
+                        <CircularProgress size={14} color="inherit" />
+                      ) : undefined
+                    }
+                  >
+                    Decommission
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -272,18 +262,19 @@ export function CommissioningSection(): ReactElement {
         </Table>
       </TableContainer>
 
-      {selected !== null && (
-        <ActivateDialog
-          robot={selected}
-          fleets={fleets ?? []}
-          levels={levels ?? []}
-          chargerNames={chargerNames}
-          onClose={(changed) => {
-            setSelected(null);
-            if (changed) reload();
-          }}
-        />
-      )}
+      <ConfirmDialog
+        open={decommissionRobot !== null}
+        title="Decommission robot"
+        message={
+          decommissionRobot?.mode === 'offline'
+            ? `Remove ${decommissionRobot?.name ?? ''} from the fleet database? The robot is offline — it will not factory-reset automatically (wipe the Pi manually if you reuse it).`
+            : `Remove ${decommissionRobot?.name ?? ''} from the fleet database? The robot is online and will factory-reset (forget Wi‑Fi, reboot into NavPro-Setup hotspot).`
+        }
+        confirmLabel="Decommission"
+        destructive
+        onConfirm={() => void confirmDecommission()}
+        onCancel={() => setDecommissionRobot(null)}
+      />
     </Box>
   );
 }

@@ -51,9 +51,14 @@ const tasksWorkspace: InitialWindow[] = [
   { layout: { x: 8, y: 0, w: 5, h: 8 }, microApp: mapApp },
 ];
 
-function platformTab(element: ReactNode, wide = false, fill = false): ReactElement {
+function platformTab(
+  element: ReactNode,
+  wide = false,
+  fill = false,
+  bleed = false,
+): ReactElement {
   return (
-    <PlatformShell wide={wide} fill={fill}>
+    <PlatformShell wide={wide} fill={fill} bleed={bleed}>
       {element}
     </PlatformShell>
   );
@@ -119,7 +124,7 @@ export function DashboardRoot(): ReactElement {
         },
         { name: 'Missions', route: 'missions', element: platformTab(<MissionsPage />) },
         { name: 'Workflows', route: 'workflows', element: platformTab(<WorkflowsPage />) },
-        { name: 'Mapping', route: 'mapping', element: platformTab(<MappingPage />) },
+        { name: 'Mapping', route: 'mapping', element: platformTab(<MappingPage />, true, true, true) },
         {
           name: 'Building',
           route: 'building',

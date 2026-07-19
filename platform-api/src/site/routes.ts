@@ -336,6 +336,11 @@ siteRouter.get(
   }),
 );
 
+const mappingCommandSchema = z.object({
+  action: z.enum(["start", "stop", "save"]),
+  levelId: z.string().uuid().optional(),
+});
+
 siteRouter.post(
   "/robots/:id/mapping",
   requireAuth,
@@ -343,16 +348,122 @@ siteRouter.post(
   auditMutations,
   asyncHandler(async (req, res) => {
     const robotId = req.params.id as string;
-    const action = z.enum(["start", "stop", "save"]).parse(req.body?.action);
-    const { rowCount } = await pool.query("SELECT 1 FROM robots WHERE id = $1", [robotId]);
-    if (rowCount === 0) throw notFound("robot");
-    await publish("robot.mapping.command", { robotId, action, ts: new Date().toISOString() });
-    await cacheRedis.set(
-      `robot:${robotId}:mapping_cmd`,
-      JSON.stringify({ action, ts: new Date().toISOString() }),
-      "EX",
-      3600,
+    const body = mappingCommandSchema.parse(req.body);
+    const { rows } = await pool.query(
+      "SELECT id, name, serial FROM robots WHERE id = $1",
+      [robotId],
     );
-    res.json({ robotId, action, queued: true });
+    if (rows[0] === undefined) throw notFound("robot");
+    const robotName = String(rows[0].name || rows[0].serial);
+    const payload = {
+      action: body.action,
+      levelId: body.levelId ?? null,
+      robotName,
+      ts: new Date().toISOString(),
+    };
+    await publish("robot.mapping.command", { robotId, ...payload });
+    await cacheRedis.set(`robot:${robotId}:ros_name`, robotName, "EX", 86400);
+    await cacheRedis.set(`robot:${robotId}:mapping_cmd`, JSON.stringify(payload), "EX", 3600);
+    if (body.action === "start") {
+      await cacheRedis.set(`robot:${robotId}:mapping_state`, "starting", "EX", 180);
+      await cacheRedis.del(
+        `robot:${robotId}:mapping_error`,
+        `robot:${robotId}:mapping_preview`,
+        `robot:${robotId}:mapping_preview_ts`,
+        `robot:${robotId}:mapping_preview_meta`,
+        `robot:${robotId}:mapping_scan`,
+      );
+    } else if (body.action === "stop") {
+      await cacheRedis.set(`robot:${robotId}:mapping_state`, "idle", "EX", 120);
+      // Drop live session artifacts so the GUI does not keep the old map/lidar.
+      await cacheRedis.del(
+        `robot:${robotId}:mapping_preview`,
+        `robot:${robotId}:mapping_preview_ts`,
+        `robot:${robotId}:mapping_preview_meta`,
+        `robot:${robotId}:mapping_scan`,
+        `robot:${robotId}:mapping_error`,
+      );
+    } else if (body.action === "save") {
+      await cacheRedis.set(`robot:${robotId}:mapping_state`, "saving", "EX", 180);
+    }
+    res.json({ robotId, action: body.action, robotName, queued: true, transport: "ros" });
+  }),
+);
+
+/** GUI reads mapping session state (starting / active / idle / saving / error). */
+siteRouter.get(
+  "/robots/:id/mapping/status",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const robotId = req.params.id as string;
+    const state = (await cacheRedis.get(`robot:${robotId}:mapping_state`)) ?? "idle";
+    const err = await cacheRedis.get(`robot:${robotId}:mapping_error`);
+    const cmd = await cacheRedis.get(`robot:${robotId}:mapping_cmd`);
+    const live = state !== "idle" && state !== "saved";
+    const previewTs = live
+      ? await cacheRedis.get(`robot:${robotId}:mapping_preview_ts`)
+      : null;
+    const metaRaw = live
+      ? await cacheRedis.get(`robot:${robotId}:mapping_preview_meta`)
+      : null;
+    const scanRaw = live ? await cacheRedis.get(`robot:${robotId}:mapping_scan`) : null;
+    const meta = metaRaw !== null ? JSON.parse(metaRaw) : null;
+    const scan = scanRaw !== null ? JSON.parse(scanRaw) : null;
+    res.json({
+      state,
+      error: err,
+      pendingCommand: cmd !== null ? JSON.parse(cmd) : null,
+      previewUpdatedAt: previewTs,
+      preview: meta,
+      scan,
+    });
+  }),
+);
+
+/** Live SLAM occupancy preview (PNG) for the Mapping GUI. */
+siteRouter.get(
+  "/robots/:id/mapping/preview",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const robotId = req.params.id as string;
+    const png = await cacheRedis.getBuffer(`robot:${robotId}:mapping_preview`);
+    if (png === null) {
+      res.status(404).json({ error: "no preview yet" });
+      return;
+    }
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(png);
+  }),
+);
+
+const teleopSchema = z.object({
+  linear: z.number().min(-1).max(1),
+  angular: z.number().min(-1).max(1),
+});
+
+/** On-screen joystick → Redis → mapping-bridge → ROS /fleet_teleop (not cmd_vel). */
+siteRouter.post(
+  "/robots/:id/teleop",
+  requireAuth,
+  requireRole("operator"),
+  asyncHandler(async (req, res) => {
+    const robotId = req.params.id as string;
+    const body = teleopSchema.parse(req.body);
+    const { rows } = await pool.query(
+      "SELECT id, name, serial FROM robots WHERE id = $1",
+      [robotId],
+    );
+    if (rows[0] === undefined) throw notFound("robot");
+    const robotName = String(rows[0].name || rows[0].serial);
+    const stopped = Math.abs(body.linear) < 1e-3 && Math.abs(body.angular) < 1e-3;
+    await cacheRedis.set(`robot:${robotId}:ros_name`, robotName, "EX", 86400);
+    await cacheRedis.set(
+      `robot:${robotId}:teleop`,
+      JSON.stringify({ ...body, stop: stopped, robotName, ts: Date.now() }),
+      "EX",
+      stopped ? 2 : 1,
+    );
+    res.json({ ok: true, transport: "ros" });
   }),
 );

@@ -1,8 +1,50 @@
 {
-  "generatedAt": "2026-07-17T18:46:48.558Z",
-  "fleets": [],
-  "robots": [],
-  "levels": [],
+  "generatedAt": "2026-07-19T13:48:38.839Z",
+  "fleets": [
+    {
+      "id": "d602c8e3-c2f5-4f93-ac83-d301af190ef9",
+      "name": "navpromini",
+      "config": {},
+      "status": "active"
+    }
+  ],
+  "robots": [
+    {
+      "id": "76ed387f-6491-41c2-95cb-c7d37c282ebe",
+      "serial": "46884ab7aa441027",
+      "name": "robot1",
+      "fleetId": "d602c8e3-c2f5-4f93-ac83-d301af190ef9",
+      "mac": "d8:3a:dd:c2:cf:e7",
+      "wifiSsid": null,
+      "levelId": "f7ad84b0-4ba9-4bc4-a11a-faece3921450",
+      "batterySpec": {},
+      "payload": {},
+      "dockWaypoint": null,
+      "homeWaypoint": null,
+      "firmwareVersion": "unknown",
+      "piVersion": null,
+      "configVersion": null,
+      "capabilities": [],
+      "mapTransform": {},
+      "status": "active",
+      "lastSeen": "2026-07-19T13:48:38.336Z",
+      "createdAt": "2026-07-19T13:27:05.231Z"
+    }
+  ],
+  "levels": [
+    {
+      "id": "f7ad84b0-4ba9-4bc4-a11a-faece3921450",
+      "name": "L1",
+      "buildingId": "a04c8da5-3d77-43cd-b26c-3c01a13b6190",
+      "floorplanPath": null,
+      "occupancyMapPath": null,
+      "navGraphIndex": 0,
+      "elevation": 0,
+      "metersPerPixel": 0.05,
+      "originX": 0,
+      "originY": 0
+    }
+  ],
   "buildings": [
     {
       "id": "a04c8da5-3d77-43cd-b26c-3c01a13b6190",

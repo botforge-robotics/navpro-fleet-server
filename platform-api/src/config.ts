@@ -27,6 +27,9 @@ export interface Config {
   adminUsername: string;
   adminPassword: string;
   provisioningToken: string;
+  defaultFleetName: string;
+  defaultLevelName: string;
+  defaultBuildingName: string;
 }
 
 export const config: Config = {
@@ -43,4 +46,7 @@ export const config: Config = {
   adminUsername: env("ADMIN_USERNAME"),
   adminPassword: env("ADMIN_PASSWORD"),
   provisioningToken: env("PROVISIONING_TOKEN"),
+  defaultFleetName: env("FLEET_NAME", "navpromini"),
+  defaultLevelName: env("DEFAULT_LEVEL_NAME", "L1"),
+  defaultBuildingName: env("DEFAULT_BUILDING_NAME", "site"),
 };

@@ -11,6 +11,8 @@ interface PlatformShellProps {
    * Used for embedded tools like the Building noVNC editor.
    */
   fill?: boolean;
+  /** Edge-to-edge content (no shell padding). Only with fill. */
+  bleed?: boolean;
 }
 
 /** Consistent ambient frame for NavPro platform tabs (missions, devices, …). */
@@ -18,6 +20,7 @@ export function PlatformShell({
   children,
   wide = false,
   fill = false,
+  bleed = false,
 }: PlatformShellProps): ReactElement {
   return (
     <Box
@@ -32,7 +35,7 @@ export function PlatformShell({
     >
       <Box
         sx={{
-          p: fill ? { xs: 1.5, md: 2 } : { xs: 2.5, md: 4 },
+          p: fill ? (bleed ? 0 : { xs: 1.5, md: 2 }) : { xs: 2.5, md: 4 },
           maxWidth: fill ? 'none' : wide ? 1600 : 1280,
           mx: fill ? 0 : 'auto',
           width: '100%',

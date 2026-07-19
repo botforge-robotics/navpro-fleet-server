@@ -1,0 +1,32 @@
+rmf_fleet:
+  name: navpromini
+  limits:
+    linear:
+      - 0.5
+      - 0.75
+    angular:
+      - 0.6
+      - 2
+  profile:
+    footprint: 0.3
+    vicinity: 0.5
+  battery_system:
+    voltage: 24
+    capacity: 20
+    charging_current: 5
+  recharge_threshold: 0.2
+  recharge_soc: 1
+  task_capabilities:
+    loop: true
+    delivery: false
+    clean: false
+  transforms: {}
+  robots:
+    robot1:
+      navigation_stack: 2
+      initial_map: L1
+plugins:
+  dock:
+    actions:
+      - dock
+      - undock

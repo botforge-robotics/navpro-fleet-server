@@ -45,8 +45,26 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
+async function requestBlob(path: string): Promise<Blob> {
+  const headers: Record<string, string> = { Accept: '*/*' };
+  const token = getToken();
+  if (token !== null) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetch(path, { method: 'GET', headers });
+  if (res.status === 401) {
+    clearSession();
+    throw new ApiError(401, 'Unauthorized');
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, await res.text());
+  }
+  return res.blob();
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
+  getBlob: (path: string) => requestBlob(path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),

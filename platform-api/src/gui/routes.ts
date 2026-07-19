@@ -12,6 +12,7 @@ import { isRunnerActive, startMissionRunner } from "../workflows/saga";
 import { fetchGuiRobots } from "./robot-view";
 import { readAlarms } from "./alarms";
 import type { GuiFleet, GuiLevel, GuiServerInfo } from "./types";
+import { ONLINE_SET_KEY } from "../health/routes";
 
 /** GUI compat/aggregation endpoints + read overrides. Mounted before the
  *  generic registry CRUD so the enriched GET shapes shadow the raw ones.
@@ -56,17 +57,82 @@ export function guiRouter(): Router {
     }),
   );
 
+  /**
+   * Hard remove from the fleet database. If the robot is currently online,
+   * queue a factory-reset command (Redis) so it wipes fleet.yaml / Wi‑Fi and
+   * reboots into the setup hotspot. Offline robots are only deleted server-side.
+   */
+  router.post(
+    "/robots/:id/decommission",
+    requireAuth,
+    requireRole("supervisor"),
+    auditMutations,
+    asyncHandler(async (req, res) => {
+      const robotId = req.params.id as string;
+      const { rows } = await pool.query(
+        "SELECT id, name, serial FROM robots WHERE id = $1",
+        [robotId],
+      );
+      if (rows[0] === undefined) throw notFound("robot");
+
+      const online = (await cacheRedis.sismember(ONLINE_SET_KEY, robotId)) === 1;
+      const ts = new Date().toISOString();
+      const robotName = String(rows[0].name || rows[0].serial);
+      await cacheRedis.set(`robot:${robotId}:ros_name`, robotName, "EX", 600);
+      if (online) {
+        await cacheRedis.set(
+          `robot:${robotId}:factory_reset`,
+          JSON.stringify({ action: "factory_reset", ts, reason: "decommission" }),
+          "EX",
+          600,
+        );
+        // Give mapping-bridge time to publish ROS /fleet_cmd before DB delete.
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+
+      const del = await pool.query("DELETE FROM robots WHERE id = $1 RETURNING id", [robotId]);
+      if (del.rowCount === 0) throw notFound("robot");
+
+      await cacheRedis.srem(ONLINE_SET_KEY, robotId);
+      const keys = await cacheRedis.keys(`robot:${robotId}:*`);
+      // Keep factory_reset + ros_name so the ROS bridge can still command the Pi.
+      const toDelete = keys.filter(
+        (k) => !k.endsWith(":factory_reset") && !k.endsWith(":ros_name"),
+      );
+      if (toDelete.length > 0) await cacheRedis.del(...toDelete);
+
+      await publish("registry.changed", {
+        resource: "robot",
+        id: robotId,
+        action: "decommissioned",
+        factoryResetQueued: online,
+      });
+
+      res.json({
+        deleted: true,
+        id: robotId,
+        name: rows[0].name,
+        serial: rows[0].serial,
+        factoryResetQueued: online,
+        message: online
+          ? "Removed from fleet database. Robot is online — factory reset queued (hotspot after reboot)."
+          : "Removed from fleet database. Robot was offline — factory reset not sent (wipe the Pi manually if needed).",
+      });
+    }),
+  );
+
   const activateSchema = z.object({
     name: z.string().min(1).optional(),
     fleetId: z.string().uuid(),
     levelId: z.string().uuid(),
-    dockWaypoint: z.string().min(1),
-    homeWaypoint: z.string().min(1).optional(),
+    /** Optional — set later after Building chargers exist. */
+    dockWaypoint: z.string().optional(),
+    homeWaypoint: z.string().optional(),
   });
 
   /**
-   * Commissioning: assign fleet/level/charger/home and mark the robot active
-   * so config-gen + navpro-rmf-adapter pick it up for the live map.
+   * Commissioning: assign fleet/level (and optional charger/home) and mark active
+   * so config-gen + navpro-rmf-adapter pick it up. Charger can be edited later.
    */
   router.post(
     "/robots/:id/activate",
@@ -76,27 +142,39 @@ export function guiRouter(): Router {
     asyncHandler(async (req, res) => {
       const robotId = req.params.id as string;
       const body = activateSchema.parse(req.body);
+      const dock =
+        body.dockWaypoint !== undefined && body.dockWaypoint.trim() !== ""
+          ? body.dockWaypoint.trim()
+          : null;
+      const home =
+        body.homeWaypoint !== undefined && body.homeWaypoint.trim() !== ""
+          ? body.homeWaypoint.trim()
+          : dock;
       const { rows } = await pool.query(
         `UPDATE robots SET
            name = COALESCE($2, name),
            fleet_id = $3,
            level_id = $4,
-           dock_waypoint = $5,
+           dock_waypoint = COALESCE($5, dock_waypoint),
            home_waypoint = COALESCE($6, home_waypoint),
            status = 'active',
            last_seen = COALESCE(last_seen, now())
          WHERE id = $1 AND status != 'retired'
-         RETURNING id`,
+         RETURNING id, name, serial`,
         [
           robotId,
           body.name ?? null,
           body.fleetId,
           body.levelId,
-          body.dockWaypoint,
-          body.homeWaypoint ?? null,
+          dock,
+          home,
         ],
       );
       if (rows[0] === undefined) throw notFound("robot");
+      const robotName = String(body.name ?? rows[0].name ?? rows[0].serial ?? "");
+      if (robotName) {
+        await cacheRedis.set(`robot:${robotId}:ros_name`, robotName, "EX", 86400);
+      }
       await publish("registry.changed", { resource: "robot", id: robotId, action: "activated" });
       const entries = await fetchGuiRobots(robotId);
       res.json(entries[0]?.robot ?? null);

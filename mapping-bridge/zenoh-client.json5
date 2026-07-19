@@ -1,0 +1,51 @@
+// zenoh-bridge-ros2dds CLIENT for the fleet-server mapping bridge.
+// Mirrors robot topics onto a local DDS domain so rclpy can pub/sub.
+{
+  mode: "client",
+  connect: {
+    endpoints: ["tcp/zenoh-router:7447"],
+  },
+  // Tolerate small clock skew vs robot Pis (else teleop/map is dropped).
+  timestamping: {
+    enabled: true,
+    drop_future_timestamp: false,
+  },
+  scouting: {
+    multicast: { enabled: false },
+    gossip: { enabled: false },
+  },
+  plugins: {
+    ros2dds: {
+      nodename: "navpro_zenoh_mapping",
+      domain: 42,
+      allow: {
+        // Local ROS pubs → robots
+        publishers: [
+          ".*/mapping_cmd",
+          ".*/fleet_cmd",
+          ".*/fleet_teleop",
+        ],
+        // Robots → local ROS
+        subscribers: [
+          ".*/map",
+          ".*/mapping_grid",
+          ".*/mapping_status",
+          ".*/mapping_pose",
+          ".*/mapping_scan",
+          ".*/tf",
+          ".*/tf_static",
+        ],
+        service_servers: [],
+        service_clients: [],
+        action_servers: [],
+        action_clients: [],
+      },
+      pub_max_frequencies: [
+        ".*/fleet_teleop=20",
+        ".*/mapping_cmd=2",
+        ".*/fleet_cmd=1",
+        ".*/mapping_scan=10",
+      ],
+    },
+  },
+}

@@ -93,8 +93,8 @@ registerRouter.post(
         levelId ?? null,
         body.firmwareVersion ?? null,
         body.piVersion ?? null,
-        body.capabilities !== undefined ? JSON.stringify(body.capabilities) : null,
-        body.batterySpec !== undefined ? JSON.stringify(body.batterySpec) : null,
+        body.capabilities !== undefined ? JSON.stringify(body.capabilities) : JSON.stringify([]),
+        body.batterySpec !== undefined ? JSON.stringify(body.batterySpec) : JSON.stringify({}),
       ],
     );
 

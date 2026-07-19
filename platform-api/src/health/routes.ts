@@ -58,8 +58,15 @@ heartbeatRouter.post(
     const body = heartbeatSchema.parse(req.body);
     const ts = new Date().toISOString();
 
-    const { rowCount } = await pool.query("UPDATE robots SET last_seen = now() WHERE id = $1", [robotId]);
-    if (rowCount === 0) throw notFound("robot");
+    const { rows } = await pool.query(
+      "UPDATE robots SET last_seen = now() WHERE id = $1 RETURNING name, serial",
+      [robotId],
+    );
+    if (rows[0] === undefined) throw notFound("robot");
+    const robotName = String(rows[0].name || rows[0].serial || "");
+    if (robotName) {
+      await cacheRedis.set(`robot:${robotId}:ros_name`, robotName, "EX", 86400);
+    }
 
     const health = { robotId, ts, ...body };
     const state = { robotId, ts, pose: body.pose, mode: body.mode, batterySoc: body.batterySoc, taskId: body.taskId };
@@ -104,15 +111,8 @@ heartbeatRouter.post(
   }),
 );
 
-heartbeatRouter.get(
-  "/robots/:id/mapping-cmd",
-  requireRobotAuth,
-  asyncHandler(async (req, res) => {
-    const robotId = req.params.id as string;
-    const raw = await cacheRedis.get(`robot:${robotId}:mapping_cmd`);
-    res.json(raw !== null ? JSON.parse(raw) : null);
-  }),
-);
+// Robot-facing HTTP poll endpoints removed — mapping/teleop/decommission
+// use ROS topics over zenoh (see fleet_bridge_node + mapping-bridge).
 
 // requireAuth is attached per-route (not via router.use) because this router
 // is mounted at /api/v1 alongside provisioning-token routes; a router-level

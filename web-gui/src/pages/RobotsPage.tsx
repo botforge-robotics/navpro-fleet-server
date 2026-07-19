@@ -1,3 +1,4 @@
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import EditIcon from '@mui/icons-material/Edit';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
 import TransformIcon from '@mui/icons-material/Transform';
@@ -25,6 +26,12 @@ import { RobotDetailDrawer } from './robots/RobotDetailDrawer';
 import { RobotEditDialog } from './robots/RobotEditDialog';
 import { TransformDialog } from './robots/TransformDialog';
 
+interface DecommissionResult {
+  deleted: boolean;
+  factoryResetQueued: boolean;
+  message: string;
+}
+
 export function RobotsPage(): ReactElement {
   const { data: robots, error, reload } = useFetch<Robot[]>('/api/v1/robots');
   const { data: fleets } = useFetch<Fleet[]>('/api/v1/fleets');
@@ -34,6 +41,9 @@ export function RobotsPage(): ReactElement {
   const [editRobot, setEditRobot] = useState<Robot | null>(null);
   const [transformRobot, setTransformRobot] = useState<Robot | null>(null);
   const [retireRobot, setRetireRobot] = useState<Robot | null>(null);
+  const [decommissionRobot, setDecommissionRobot] = useState<Robot | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fleetName = (id: string | null): string =>
     fleets?.find((f) => f.id === id)?.name ?? 'unassigned';
@@ -47,6 +57,23 @@ export function RobotsPage(): ReactElement {
     reload();
   };
 
+  const confirmDecommission = async (): Promise<void> => {
+    if (decommissionRobot === null) return;
+    const robot = decommissionRobot;
+    setDecommissionRobot(null);
+    setActionError(null);
+    setActionMsg(null);
+    try {
+      const result = await api.post<DecommissionResult>(
+        `/api/v1/robots/${robot.id}/decommission`,
+      );
+      setActionMsg(result.message);
+      reload();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   return (
     <Box>
       <PageHeader
@@ -54,6 +81,16 @@ export function RobotsPage(): ReactElement {
         subtitle="Registry is the source of truth; RMF config is generated from it"
       />
       {error !== null && <Alert severity="error">{error}</Alert>}
+      {actionError !== null && (
+        <Alert severity="error" sx={{ mb: 1 }} onClose={() => setActionError(null)}>
+          {actionError}
+        </Alert>
+      )}
+      {actionMsg !== null && (
+        <Alert severity="success" sx={{ mb: 1 }} onClose={() => setActionMsg(null)}>
+          {actionMsg}
+        </Alert>
+      )}
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
           <TableHead>
@@ -107,13 +144,22 @@ export function RobotsPage(): ReactElement {
                       <TransformIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Retire robot">
+                  <Tooltip title="Retire (keep history)">
                     <IconButton
                       onClick={() => setRetireRobot(robot)}
                       size="small"
                       disabled={robot.retired}
                     >
                       <PersonOffIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Decommission (delete + factory reset if online)">
+                    <IconButton
+                      onClick={() => setDecommissionRobot(robot)}
+                      size="small"
+                      color="error"
+                    >
+                      <DeleteForeverIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </TableCell>
@@ -155,6 +201,19 @@ export function RobotsPage(): ReactElement {
         destructive
         onConfirm={() => void confirmRetire()}
         onCancel={() => setRetireRobot(null)}
+      />
+      <ConfirmDialog
+        open={decommissionRobot !== null}
+        title="Decommission robot"
+        message={
+          decommissionRobot?.mode === 'offline'
+            ? `Delete ${decommissionRobot?.name ?? ''} from the fleet database? Offline — no automatic factory reset.`
+            : `Delete ${decommissionRobot?.name ?? ''} from the fleet database? Online — the robot will factory-reset into the setup hotspot.`
+        }
+        confirmLabel="Decommission"
+        destructive
+        onConfirm={() => void confirmDecommission()}
+        onCancel={() => setDecommissionRobot(null)}
       />
     </Box>
   );

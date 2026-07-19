@@ -8,6 +8,7 @@ import { closeRedis } from "./redis";
 import { errorHandler } from "./http/errors";
 import { authRouter } from "./auth/routes";
 import { seedAdminUser } from "./auth/seed";
+import { seedSiteDefaults } from "./auth/seed-site";
 import { registryRouter } from "./registry/routes";
 import { configGenRouter } from "./config-gen/routes";
 import { generateSiteSafe } from "./config-gen/generate";
@@ -61,6 +62,7 @@ function buildApp(): express.Express {
 async function main(): Promise<void> {
   await runMigrations();
   await seedAdminUser();
+  await seedSiteDefaults();
 
   const app = buildApp();
   const server = http.createServer(app);

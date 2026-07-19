@@ -73,6 +73,25 @@ services:
       - ./zenoh/zenoh-router.json5:/zenoh/zenoh-router.json5:ro
     networks: [fleet]
 
+  # ROS↔zenoh mapping bridge: GUI/API Redis → /<robot>/mapping_cmd + fleet_teleop;
+  # robot /map → PNG preview in Redis. Keeps /cmd_vel off the wire.
+  mapping-bridge:
+    build: ./mapping-bridge
+    image: navpro/mapping-bridge:jazzy
+    restart: unless-stopped
+    environment:
+      REDIS_CACHE_URL: redis://redis-cache:6379
+      ROS_DOMAIN_ID: "42"
+    volumes:
+      - ./mapping-bridge/zenoh-client.json5:/bridge/zenoh-client.json5:ro
+      - ./mapping-bridge/mapping_bridge_node.py:/bridge/mapping_bridge_node.py:ro
+    depends_on:
+      zenoh-router:
+        condition: service_started
+      redis-cache:
+        condition: service_healthy
+    networks: [fleet]
+
   # Build-only base image: rmf-core (Open-RMF Jazzy + free_fleet). The runtime
   # container is rmf-core below, whose image layers the navpro adapter on top.
   # Build order matters:
@@ -138,6 +157,9 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set in .env}
       PROVISIONING_TOKEN: ${PROVISIONING_TOKEN:?set in .env}
+      FLEET_NAME: ${FLEET_NAME:-navpromini}
+      DEFAULT_LEVEL_NAME: ${DEFAULT_LEVEL_NAME:-L1}
+      DEFAULT_BUILDING_NAME: ${DEFAULT_BUILDING_NAME:-site}
     volumes:
       - ./site:/site
       - ./keys:/keys:ro
