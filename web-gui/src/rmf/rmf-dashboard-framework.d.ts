@@ -60,6 +60,14 @@ declare module 'rmf-dashboard-framework/components' {
     defaultRobotZoom: number;
     defaultZoom: number;
     sx?: SxProps<Theme>;
+    /** Extra buttons in the robot-click summary (e.g. Drive teleop). */
+    renderRobotSummaryActions?: (robot: { name: string; fleet: string }) => ReactNode;
+    /** Non-modal overlay instead of the blocking robot summary dialog. */
+    renderRobotOverlay?: (
+      robot: { name: string; fleet: string },
+      onClose: () => void,
+      location: [number, number, number, string] | null,
+    ) => ReactNode;
   }
 
   export const Map: React.ComponentType<MapProps>;
@@ -73,6 +81,12 @@ declare module 'rmf-dashboard-framework/micro-apps' {
     defaultMapLevel: string;
     defaultRobotZoom: number;
     defaultZoom: number;
+    renderRobotSummaryActions?: (robot: { name: string; fleet: string }) => ReactNode;
+    renderRobotOverlay?: (
+      robot: { name: string; fleet: string },
+      onClose: () => void,
+      location: [number, number, number, string] | null,
+    ) => ReactNode;
   }
 
   export function createMapApp(config: MapAppConfig): MicroAppManifest;

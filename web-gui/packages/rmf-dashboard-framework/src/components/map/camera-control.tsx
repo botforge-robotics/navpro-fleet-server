@@ -1,10 +1,11 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import React, { useEffect, useRef } from 'react';
 import { Subscription } from 'rxjs';
-import { MOUSE, Vector3 } from 'three';
+import { Box3, MOUSE, Vector3 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { AppEvents } from '../app-events';
+import { computeFitZoom } from './utils';
 
 const DEFAULT_ZOOM_IN_CONSTANT = 1.2;
 const DEFAULT_ZOOM_OUT_CONSTANT = 0.8;
@@ -99,6 +100,40 @@ export const CameraControl: React.FC<CameraControlProps> = ({ zoom }) => {
       AppEvents.cameraPosition.next(new Vector3().copy(camera.position));
     }
   });
+
+  return null;
+};
+
+interface FitCameraOnResizeProps {
+  sceneBoundingBox: Box3;
+}
+
+/** Keeps the orthographic camera framed when the canvas is embedded in a resizable panel. */
+export const FitCameraOnResize: React.FC<FitCameraOnResizeProps> = ({ sceneBoundingBox }) => {
+  const { camera, size } = useThree();
+  const lastSize = useRef({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (size.width < 1 || size.height < 1) {
+      return;
+    }
+    if (
+      lastSize.current.width === size.width &&
+      lastSize.current.height === size.height
+    ) {
+      return;
+    }
+    lastSize.current = { width: size.width, height: size.height };
+
+    const center = sceneBoundingBox.getCenter(new Vector3());
+    const bboxSize = sceneBoundingBox.getSize(new Vector3());
+    const distance = Math.max(bboxSize.x, bboxSize.y, bboxSize.z) * 0.7;
+    const fitZoom = computeFitZoom(sceneBoundingBox, size.width, size.height);
+    camera.position.set(center.x, center.y, center.z + distance);
+    camera.zoom = fitZoom;
+    camera.updateProjectionMatrix();
+    AppEvents.zoom.next(fitZoom);
+  }, [camera, sceneBoundingBox, size.height, size.width]);
 
   return null;
 };

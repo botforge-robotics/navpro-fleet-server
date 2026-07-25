@@ -58,14 +58,17 @@ export function OpsWorkspaceShell({ children }: { children: ReactNode }): ReactE
     <Box
       sx={{
         height: 'calc(100vh - 3.5rem)',
-        overflow: 'auto',
+        minHeight: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
         bgcolor: 'background.default',
         backgroundImage: canvasBackground,
         p: 1,
         boxSizing: 'border-box',
       }}
     >
-      {children}
+      <Box sx={{ flex: 1, minHeight: 0, width: '100%' }}>{children}</Box>
     </Box>
   );
 }

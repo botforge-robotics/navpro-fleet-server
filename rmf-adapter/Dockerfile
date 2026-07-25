@@ -15,6 +15,12 @@ FROM ${BASE_IMAGE}
 COPY pyproject.toml README.md /opt/navpro-rmf-adapter/
 COPY navpro_rmf_adapter/ /opt/navpro-rmf-adapter/navpro_rmf_adapter/
 
+# nav2_msgs / action_msgs needed when NAVPRO_LOCAL_NAV2=1 (host-sim DDS).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ros-jazzy-nav2-msgs \
+        ros-jazzy-action-msgs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Runtime deps (httpx, pyyaml, eclipse-zenoh, nudged) are already pinned in
 # the base image; this just installs the package itself.
 RUN pip3 install --no-cache-dir --break-system-packages \

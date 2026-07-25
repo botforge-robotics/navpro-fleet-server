@@ -50,6 +50,9 @@ export const Window = styled(
             boxShadow: theme.shadows[1],
             bgcolor: theme.palette.background.paper,
             overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
             transition: theme.transitions.create(['border-color', 'box-shadow'], {
               duration: theme.transitions.duration.short,
             }),
@@ -67,7 +70,15 @@ export const Window = styled(
               <WindowCloseButton onClick={() => onClose && onClose()} />
             </WindowToolbar>
           )}
-          <Box width="100%" height="100%" overflow="auto">
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              width: '100%',
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
             {childComponents}
           </Box>
           {windowManagerState.designMode && resizeComponent}

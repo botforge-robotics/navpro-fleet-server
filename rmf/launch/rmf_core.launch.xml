@@ -29,7 +29,7 @@
                     false: run stock free_fleet_adapter (static fleet config)"/>
   <arg name="zenoh_config_file" default="/rmf/config/zenoh-client.json5"
        description="Zenoh client session config pointing at the zenoh router"/>
-  <arg name="bidding_time_window" default="2.0"
+  <arg name="bidding_time_window" default="10.0"
        description="Time window in seconds for task bidding process"/>
   <arg name="use_unique_hex_string_with_task_id" default="true"
        description="Appends a unique hex string to the task ID"/>
@@ -77,6 +77,17 @@
     <param name="use_sim_time" value="$(var use_sim_time)"/>
   </node>
 
+  <!-- Schedule visualizer (GUI robot path trajectories on :8006) -->
+  <node pkg="rmf_visualization_schedule" exec="schedule_visualizer_node" output="both"
+        name="schedule_visualizer_node">
+    <param name="use_sim_time" value="$(var use_sim_time)"/>
+    <param name="port" value="8006"/>
+    <param name="rate" value="1.0"/>
+    <param name="path_width" value="0.3"/>
+    <param name="initial_map_name" value="L1"/>
+    <param name="wait_secs" value="10"/>
+  </node>
+
   <!-- Fleet adapter -->
   <group if="$(var start_fleet_adapter)">
     <let name="use_sim_time_flag" if="$(var use_sim_time)" value=" -sim"/>
@@ -87,7 +98,10 @@
          python package is installed (navpro/rmf-adapter image). Configured
          via NAVPRO_* / PLATFORM_API_* env vars, see rmf-adapter/README.md. -->
     <group if="$(var use_navpro_adapter)">
-      <executable cmd="python3 -m navpro_rmf_adapter" output="both">
+      <!-- respawn: adapter has segfaulted near door/pantry handoff (exit -11);
+           without this, GUI poses freeze while Gazebo keeps moving. -->
+      <executable cmd="python3 -m navpro_rmf_adapter" output="both"
+                  respawn="true" respawn_delay="3.0">
         <env name="NAVPRO_FLEET_NAME" value="$(var fleet_name)"/>
         <env name="NAVPRO_FLEET_CONFIG" value="$(var fleet_config_file)"/>
         <env name="NAVPRO_NAV_GRAPH" value="$(var nav_graph_file)"/>

@@ -126,6 +126,8 @@ class MappingBridgeNode(Node):
         self._teleop_pubs: dict[str, object] = {}
         self._poses: dict[str, dict] = {}
         self._last_fleet: dict[str, str] = {}
+        # Smoothed teleop output per robot (avoids zero-spam jerk from Redis TTL gaps).
+        self._teleop_smooth: dict[str, dict[str, float]] = {}
         self.create_timer(0.25, self._discover_tick)
         self.create_timer(0.05, self._teleop_tick)
         self.create_timer(0.2, self._mapping_cmd_tick)
@@ -217,6 +219,7 @@ class MappingBridgeNode(Node):
             self._poses,
             self._last_cmd,
             self._last_fleet,
+            self._teleop_smooth,
         ):
             store.pop(robot_id, None)
 
@@ -238,9 +241,11 @@ class MappingBridgeNode(Node):
             self.get_logger().info(f'ROS mapping_cmd → /{info["name"]}/mapping_cmd')
 
     def _fleet_cmd_tick(self) -> None:
-        """Push decommission/factory_reset over ROS /fleet_cmd."""
+        """Push fleet_cmd / factory_reset over ROS /fleet_cmd."""
         try:
-            keys = self._redis.keys('robot:*:factory_reset')
+            keys = list(self._redis.keys('robot:*:factory_reset')) + list(
+                self._redis.keys('robot:*:fleet_cmd')
+            )
         except redis.RedisError:
             return
         for key in keys:
@@ -253,7 +258,8 @@ class MappingBridgeNode(Node):
             if raw is None:
                 continue
             text = raw.decode() if isinstance(raw, bytes) else str(raw)
-            if text == self._last_fleet.get(robot_id):
+            dedupe_key = f'{key_s}:{text}'
+            if dedupe_key == self._last_fleet.get(robot_id):
                 continue
             name_raw = self._redis.get(f'robot:{robot_id}:ros_name')
             if name_raw is None:
@@ -265,28 +271,60 @@ class MappingBridgeNode(Node):
             pub = self._fleet_pubs.get(robot_id)
             if pub is None:
                 continue
-            self._last_fleet[robot_id] = text
+            self._last_fleet[robot_id] = dedupe_key
             msg = String()
             msg.data = text
             pub.publish(msg)
             self.get_logger().warn(f'ROS fleet_cmd → /{name}/fleet_cmd')
 
     def _teleop_tick(self) -> None:
+        # GUI writes Redis; we publish Twist at 20 Hz with light smoothing.
+        # Do NOT spam zeros when idle — that jerk-stops the robot against real cmds.
+        alpha = 0.35  # higher = snappier; lower = smoother
+        idle_eps = 1e-3
         for robot_id in list(self._robots):
             raw = self._redis.get(f'robot:{robot_id}:teleop')
             pub = self._teleop_pubs.get(robot_id)
             if pub is None:
                 continue
-            tw = Twist()
+
+            target_lin = 0.0
+            target_ang = 0.0
+            active = False
             if raw is not None:
                 try:
                     payload = json.loads(raw)
                     if not payload.get('stop'):
-                        tw.linear.x = float(payload.get('linear') or 0.0)
-                        tw.angular.z = float(payload.get('angular') or 0.0)
+                        target_lin = float(payload.get('linear') or 0.0)
+                        target_ang = float(payload.get('angular') or 0.0)
+                        active = abs(target_lin) > idle_eps or abs(target_ang) > idle_eps
+                    else:
+                        active = False  # explicit stop → ramp to zero
+                        target_lin = 0.0
+                        target_ang = 0.0
                 except (json.JSONDecodeError, TypeError, ValueError):
                     pass
-            pub.publish(tw)
+
+            state = self._teleop_smooth.setdefault(
+                robot_id, {'lin': 0.0, 'ang': 0.0, 'publishing': False}
+            )
+            state['lin'] += alpha * (target_lin - state['lin'])
+            state['ang'] += alpha * (target_ang - state['ang'])
+
+            near_zero = abs(state['lin']) < idle_eps and abs(state['ang']) < idle_eps
+            if active or not near_zero:
+                state['publishing'] = True
+                tw = Twist()
+                tw.linear.x = 0.0 if abs(state['lin']) < idle_eps else state['lin']
+                tw.angular.z = 0.0 if abs(state['ang']) < idle_eps else state['ang']
+                pub.publish(tw)
+            elif state['publishing']:
+                # One clean stop frame, then silence.
+                pub.publish(Twist())
+                state['lin'] = 0.0
+                state['ang'] = 0.0
+                state['publishing'] = False
+
 
     def _on_status(self, robot_id: str, msg: String) -> None:
         try:
@@ -294,6 +332,9 @@ class MappingBridgeNode(Node):
         except json.JSONDecodeError:
             return
         state = str(payload.get('state') or 'idle')
+        # Robot mode_manager historically used "mapping"; GUI expects "active".
+        if state == 'mapping':
+            state = 'active'
         pipe = self._redis.pipeline()
         pipe.set(f'robot:{robot_id}:mapping_state', state, ex=300)
         err = payload.get('error')
@@ -306,6 +347,7 @@ class MappingBridgeNode(Node):
             pipe.delete(f'robot:{robot_id}:mapping_preview_ts')
             pipe.delete(f'robot:{robot_id}:mapping_preview_meta')
             pipe.delete(f'robot:{robot_id}:mapping_scan')
+            pipe.delete(f'robot:{robot_id}:mapping_pose')
             self._poses.pop(robot_id, None)
         else:
             # Lidar overlay may arrive embedded in mapping_status (zenoh-friendly).
@@ -321,11 +363,30 @@ class MappingBridgeNode(Node):
         pipe.execute()
 
     def _on_pose(self, robot_id: str, msg: PoseStamped) -> None:
-        self._poses[robot_id] = {
+        pose = {
             'x': float(msg.pose.position.x),
             'y': float(msg.pose.position.y),
             'yaw': yaw_from_quat(msg.pose.orientation),
         }
+        self._poses[robot_id] = pose
+        # Fast path for GUI marker (do not wait for next occupancy PNG ~2s).
+        try:
+            body = json.dumps(pose, separators=(',', ':'))
+            pipe = self._redis.pipeline()
+            pipe.set(f'robot:{robot_id}:mapping_pose', body, ex=3)
+            meta_raw = self._redis.get(f'robot:{robot_id}:mapping_preview_meta')
+            if meta_raw is not None:
+                meta = json.loads(meta_raw)
+                if isinstance(meta, dict):
+                    meta['pose'] = pose
+                    pipe.set(
+                        f'robot:{robot_id}:mapping_preview_meta',
+                        json.dumps(meta, separators=(',', ':')),
+                        ex=30,
+                    )
+            pipe.execute()
+        except (redis.RedisError, json.JSONDecodeError, TypeError):
+            pass
 
     def _on_scan(self, robot_id: str, msg: String) -> None:
         """Cache lidar points (map-frame xy flat list) for the Mapping GUI."""

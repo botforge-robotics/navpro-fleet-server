@@ -6,11 +6,12 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Map } from 'rmf-dashboard-framework/components';
 import { ApiError, api } from '../api/client';
+import { MapRobotDriveDock } from '../components/MapRobotDriveDock';
 import { viewRadius } from '../theme/appTheme';
 
 interface BuildingMapSummary {
@@ -39,13 +40,6 @@ function summarizeMap(map: BuildingMapSummary | null): MapReadyState {
   });
   return hasContent ? 'ready' : 'empty';
 }
-
-const mapConfig = {
-  attributionPrefix: 'NavPro / Open-RMF',
-  defaultMapLevel: 'L1',
-  defaultRobotZoom: 20,
-  defaultZoom: 20,
-} as const;
 
 /**
  * Full-bleed Map tab with an empty-state panel when RMF has no building map yet.
@@ -80,6 +74,22 @@ export function MapTab(): ReactElement {
     return () => window.clearInterval(id);
   }, [checkMap]);
 
+  const renderRobotOverlay = useCallback(
+    (
+      robot: { name: string; fleet: string },
+      onClose: () => void,
+      location: [number, number, number, string] | null,
+    ): ReactNode => (
+      <MapRobotDriveDock
+        robotName={robot.name}
+        fleet={robot.fleet}
+        location={location}
+        onClose={onClose}
+      />
+    ),
+    [],
+  );
+
   if (state === 'ready') {
     return (
       <Box
@@ -91,7 +101,13 @@ export function MapTab(): ReactElement {
           bgcolor: 'background.default',
         }}
       >
-        <Map {...mapConfig} />
+        <Map
+          attributionPrefix=""
+          defaultMapLevel="L1"
+          defaultRobotZoom={20}
+          defaultZoom={6}
+          renderRobotOverlay={renderRobotOverlay}
+        />
       </Box>
     );
   }

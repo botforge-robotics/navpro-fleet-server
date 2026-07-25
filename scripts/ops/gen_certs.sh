@@ -7,7 +7,7 @@
 # Idempotent: refuses to overwrite existing keys unless --force.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 FORCE="${1:-}"
 
 if [[ -f keys/jwt-private.pem && "$FORCE" != "--force" ]]; then

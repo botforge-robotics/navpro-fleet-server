@@ -8,6 +8,7 @@ import {
 } from 'api-client';
 
 import { RmfApi } from '../../services';
+import { formatRmfTime } from './rmf-time';
 import { getTaskBookingLabelFromTaskState } from './task-booking-label-utils';
 import { RobotDispatchTarget } from './task-form';
 import { Schedule } from './task-form';
@@ -63,9 +64,7 @@ export function exportCsvMinimal(timestamp: Date, allTasks: TaskState[]) {
 
     const values = [
       // Date
-      task.booking.unix_millis_request_time
-        ? `${new Date(task.booking.unix_millis_request_time).toLocaleDateString()}`
-        : 'n/a',
+      formatRmfTime(task.booking.unix_millis_request_time),
       // Requester
       task.booking.requester ? task.booking.requester : 'n/a',
       // Pickup
@@ -77,17 +76,9 @@ export function exportCsvMinimal(timestamp: Date, allTasks: TaskState[]) {
       // Robot
       task.assigned_to ? task.assigned_to.name : 'n/a',
       // Start Time
-      task.unix_millis_start_time
-        ? `${new Date(task.unix_millis_start_time).toLocaleDateString()} ${new Date(
-            task.unix_millis_start_time,
-          ).toLocaleTimeString()}`
-        : 'n/a',
+      formatRmfTime(task.unix_millis_start_time),
       // End Time
-      task.unix_millis_finish_time
-        ? `${new Date(task.unix_millis_finish_time).toLocaleDateString()} ${new Date(
-            task.unix_millis_finish_time,
-          ).toLocaleTimeString()}`
-        : 'n/a',
+      formatRmfTime(task.unix_millis_finish_time),
       // State
       task.status ? task.status : 'n/a',
     ];

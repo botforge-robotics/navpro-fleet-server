@@ -22,6 +22,8 @@ import {
   TaskStateOutput as TaskState,
 } from 'api-client';
 
+import { formatRmfTimeOnly } from './rmf-time';
+
 const classes = {
   paper: 'timeline-paper',
   secondaryTail: 'timeline-secondary-tail',
@@ -121,7 +123,7 @@ function RenderPhase(phase: Phase) {
       <TimelineOppositeContent color="text.secondary">
         <Typography variant="overline" color="textSecondary" style={{ textAlign: 'justify' }}>
           {phase.unix_millis_start_time != null
-            ? new Date(phase.unix_millis_start_time).toLocaleTimeString()
+            ? formatRmfTimeOnly(phase.unix_millis_start_time)
             : null}
         </Typography>
       </TimelineOppositeContent>

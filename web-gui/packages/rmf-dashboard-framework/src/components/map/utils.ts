@@ -157,3 +157,18 @@ export const findSceneBoundingBoxFromThreeFiber = (level: Level | undefined): Bo
   }
   return new Box3(new Vector3(minX, minY, minZ), new Vector3(maxX, maxY, maxZ));
 };
+
+/** Pick an orthographic zoom that frames `bbox` in a viewport (R3F pixel-ish units). */
+export const computeFitZoom = (
+  bbox: Box3,
+  viewportWidth: number,
+  viewportHeight: number,
+  padding = 1.15,
+): number => {
+  const size = bbox.getSize(new Vector3());
+  const worldW = Math.max(size.x, 1) * padding;
+  const worldH = Math.max(size.y, 1) * padding;
+  const zoomW = viewportWidth / worldW;
+  const zoomH = viewportHeight / worldH;
+  return Math.max(1, Math.min(zoomW, zoomH));
+};

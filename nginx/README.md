@@ -12,7 +12,7 @@ No separate GUI container or sibling repo is required.
 ```bash
 cd /path/to/navpro-fleet-server
 cp .env.example .env   # set LAN_IP, passwords, PROVISIONING_TOKEN
-./scripts/gen_certs.sh # if first time
+./scripts/ops/gen_certs.sh # if first time
 
 docker compose build nginx
 docker compose up -d

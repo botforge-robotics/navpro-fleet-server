@@ -29,7 +29,7 @@ import {
 } from './task-table-datagrid';
 import { exportCsvFull, exportCsvMinimal } from './utils';
 
-const RefreshTaskQueueTableInterval = 15000;
+const RefreshTaskQueueTableInterval = 5000;
 const QueryLimit = 100;
 
 export enum TaskTablePanel {
@@ -167,7 +167,7 @@ export const TasksWindow = React.memo(
           }
         }
 
-        let orderBy: string = '-unix_millis_start_time';
+        let orderBy: string = '-unix_millis_request_time';
         if (sortFields.model && sortFields.model.length >= 1) {
           orderBy =
             sortFields.model[0].sort === 'desc'
@@ -233,6 +233,8 @@ export const TasksWindow = React.memo(
         let queries: TaskState[];
         let queryIndex = 0;
         do {
+          // Filter by request_time (wall clock). Start/finish are often sim-era
+          // (~1970) under Gazebo and would match almost nothing for "past month".
           queries = (
             await rmfApi.tasksApi.queryTaskStatesTasksGet(
               undefined,
@@ -241,12 +243,12 @@ export const TasksWindow = React.memo(
               undefined,
               undefined,
               undefined,
-              undefined,
               `${currentMillis - oneMonthMillis},${currentMillis}`,
+              undefined,
               undefined,
               QueryLimit,
               queryIndex * QueryLimit,
-              '-unix_millis_start_time',
+              '-unix_millis_request_time',
               undefined,
             )
           ).data;

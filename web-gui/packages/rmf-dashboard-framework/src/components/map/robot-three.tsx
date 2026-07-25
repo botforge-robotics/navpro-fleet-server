@@ -14,10 +14,14 @@ interface RobotThreeProps {
 
 export const RobotThree = ({ robot, robotLocation, onRobotClick, robotLabel }: RobotThreeProps) => {
   const STANDAR_Z_POSITION = 5;
-  const CIRCLE_SEGMENT = 64;
+  const CIRCLE_SEGMENT = 24;
 
   const robotId = `${robot.fleet}/${robot.name}`;
-  const rotationZ = robotLocation[2] - Math.PI;
+  // Upstream rmf-web subtracts π for icon sprites that face −X. NavPro uses
+  // circle + heading ray (no icon), so RMF yaw must map 1:1 (0 = +X).
+  const rotationZ = robot.iconPath
+    ? robotLocation[2] - Math.PI
+    : robotLocation[2];
 
   const position = new Vector3(robotLocation[0], robotLocation[1], STANDAR_Z_POSITION);
 

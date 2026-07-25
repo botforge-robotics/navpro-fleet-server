@@ -17,6 +17,8 @@ export interface GuiRobotHealth {
   cpuTempC: number | null;
   batteryTempC: number | null;
   motorFault: boolean;
+  navMode: string | null;
+  readyForTasks: boolean;
 }
 
 export interface GuiRobotPose {

@@ -221,7 +221,11 @@ export const AppBar = React.memo(
             await rmfApi.buildingApi.getPreviousFireAlarmTriggerBuildingMapPreviousFireAlarmTriggerGet();
           setFireAlarmPreviousTrigger(resp.data);
         } catch (e) {
-          console.error(`Failed to get previous fire alarm trigger: ${(e as Error).message}`);
+          // 404 = no prior fire alarm — expected; do not alarm the console.
+          const status = (e as { response?: { status?: number } })?.response?.status;
+          if (status !== 404) {
+            console.error(`Failed to get previous fire alarm trigger: ${(e as Error).message}`);
+          }
         }
       })();
     }, [rmfApi, openAdminActionsDialog]);

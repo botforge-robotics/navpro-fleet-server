@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Automated backup: Postgres dump + fleet snapshot (site config, registry
 # snapshot, keys metadata). Schedule via cron, e.g.:
-#   0 3 * * * /opt/navpro-fleet-server/scripts/backup.sh /backups
+# cron: 0 3 * * * /opt/navpro-fleet-server/scripts/ops/backup.sh /backups
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 DEST="${1:-./backups}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$DEST"

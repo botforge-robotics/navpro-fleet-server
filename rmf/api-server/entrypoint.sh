@@ -39,4 +39,34 @@ if [ "${USE_SIM_TIME:-false}" = "true" ]; then
   export RMF_SERVER_USE_SIM_TIME=true
 fi
 
+# Upstream rmf_api_server crashes on startup when DoorState/LiftState rows were
+# persisted as Tortoise models (DoorState.model_validate(row) expects dict fields).
+# Wipe volatile device-state tables before boot so the server can start; live
+# ROS topics repopulate them immediately after.
+if command -v python3 >/dev/null 2>&1; then
+  python3 - <<'PY' || true
+import os, sys
+url = os.environ.get("RMF_API_SERVER_DB_URL", "")
+if not url.startswith("postgres"):
+    sys.exit(0)
+try:
+    import psycopg2
+except ImportError:
+    sys.exit(0)
+try:
+    conn = psycopg2.connect(url)
+    conn.autocommit = True
+    cur = conn.cursor()
+    cur.execute(
+        "TRUNCATE doorstate, liftstate, dispenserstate, "
+        "ingestorstate, fleetstate, beaconstate RESTART IDENTITY CASCADE"
+    )
+    print("[rmf-api-server] cleared volatile device-state tables")
+    cur.close()
+    conn.close()
+except Exception as exc:  # noqa: BLE001
+    print(f"[rmf-api-server] WARN: could not clear state tables: {exc}", file=sys.stderr)
+PY
+fi
+
 exec rmf_api_server "$@"

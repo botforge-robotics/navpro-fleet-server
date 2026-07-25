@@ -40,7 +40,10 @@ import zenoh
 
 from free_fleet_adapter.nav2_robot_adapter import Nav2RobotAdapter
 
+import os
+
 from navpro_rmf_adapter.config import AdapterConfig
+from navpro_rmf_adapter.nav2_robot import NavProNav2RobotAdapter
 from navpro_rmf_adapter.registry_client import RegistryClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -132,13 +135,29 @@ class NavProFleetAdapter:
             self.adapter.node.use_sim_time()
 
         self.adapter.start()
+        # adapter.start() already owns a C++ executor for this node. Do not call
+        # spin_rclcpp(adapter.node) — it errors "already added to an executor".
         time.sleep(1.0)
 
         self.fleet_config.server_uri = cfg.server_uri
 
-        for level, coords in self.config_yaml.get(
-            'reference_coordinates', {}
-        ).items():
+        ref_coords = self.config_yaml.get('reference_coordinates') or {}
+        if not ref_coords:
+            # EasyFullControl requires a per-map transform; default identity.
+            identity = {
+                'rmf': [[0.0, 0.0], [10.0, 0.0], [0.0, 10.0]],
+                'robot': [[0.0, 0.0], [10.0, 0.0], [0.0, 10.0]],
+            }
+            maps = {
+                (r.get('initial_map') or 'L1')
+                for r in (self.config_yaml.get('rmf_fleet') or {}).get('robots', {}).values()
+            }
+            ref_coords = {m: identity for m in maps}
+            _LOGGER.warning(
+                'No reference_coordinates in fleet config; using identity for %s',
+                sorted(maps),
+            )
+        for level, coords in ref_coords.items():
             tf = compute_transforms(level, coords, self.node)
             self.fleet_config.add_robot_coordinates_transformation(level, tf)
 
@@ -146,6 +165,21 @@ class NavProFleetAdapter:
         assert self.fleet_handle is not None, (
             'Failed to create EasyFullControl fleet; verify the fleet config.'
         )
+
+        # EasyFullControl already wires consider_* from task_capabilities in
+        # the fleet YAML (same as free_fleet). Do not replace those callbacks.
+        try:
+            more = self.fleet_handle.more()
+            for name in (
+                'fleet_state_topic_publish_period',
+                'fleet_state_publish_period',
+            ):
+                fn = getattr(more, name, None)
+                if callable(fn):
+                    fn(1.0)
+                    break
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.warning('Failed to configure fleet publish period: %s', exc)
 
         self._register_plugin_actions()
 
@@ -251,13 +285,32 @@ class NavProFleetAdapter:
             )
             return
 
+        with self._robots_lock:
+            existing = self.robots.get(robot_name)
+            if existing is not None:
+                _LOGGER.info(
+                    'Robot [%s] already in fleet; skip duplicate add.',
+                    robot_name,
+                )
+                return
+            # Reserve name so a concurrent/queued add cannot construct twice.
+            self.robots[robot_name] = None  # type: ignore[assignment]
+
         try:
             # TODO(pin-api): constructor signature matches free_fleet jazzy @
             # cc5b8cd8 (name, configuration, robot_config_yaml, plugin_config,
             # node, zenoh_session, fleet_handle, fleet_config, tf_buffer).
             # Re-verify on any free_fleet bump; the humble->jazzy transition
             # already changed this signature once.
-            robot = Nav2RobotAdapter(
+            use_local_nav2 = os.environ.get(
+                'NAVPRO_LOCAL_NAV2', ''
+            ).strip().lower() in ('1', 'true', 'yes', 'on')
+            if use_local_nav2:
+                from navpro_rmf_adapter.local_nav2 import LocalNav2RobotAdapter
+                RobotAdapterCls = LocalNav2RobotAdapter
+            else:
+                RobotAdapterCls = NavProNav2RobotAdapter
+            robot = RobotAdapterCls(
                 robot_name,
                 robot_config,
                 robot_yaml,
@@ -271,13 +324,30 @@ class NavProFleetAdapter:
         except RuntimeError as exc:
             # Typically an init-pose timeout (robot not publishing over
             # zenoh yet). Retry on a later poll tick.
+            with self._robots_lock:
+                if self.robots.get(robot_name) is None:
+                    self.robots.pop(robot_name, None)
             _LOGGER.warning('Failed to add robot [%s]: %s; will retry.',
                             robot_name, exc)
             self._known_names.discard(robot_name)
             return
+        except Exception:
+            with self._robots_lock:
+                if self.robots.get(robot_name) is None:
+                    self.robots.pop(robot_name, None)
+            raise
 
         with self._robots_lock:
             self.robots[robot_name] = robot
+        try:
+            # Keep merge radii tight. EasyFullControl snaps fleet_states XY to
+            # the nearest waypoint/lane within this radius (yaw still updates),
+            # so a large value freezes the map marker at parking while driving.
+            # ~0.15 m = at-vertex snap only; lane 0.4 m still helps path merge.
+            robot.update_handle.set_max_merge_waypoint_distance(0.15)
+            robot.update_handle.set_max_merge_lane_distance(0.4)
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug('merge distance tweak failed for [%s]: %s', robot_name, exc)
         _LOGGER.info('Robot [%s] added to fleet [%s].',
                      robot_name, self.fleet_config.fleet_name)
 
@@ -322,36 +392,55 @@ class NavProFleetAdapter:
             )
         )
         last_state_post = 0.0
+        tick = 0
         while rclpy.ok():
-            now = self.node.get_clock().now()
-            with self._robots_lock:
-                robots = list(self.robots.items())
+            tick += 1
+            try:
+                now = self.node.get_clock().now()
+                with self._robots_lock:
+                    robots = list(self.robots.items())
 
-            for name, robot in robots:
-                try:
-                    pose = robot.get_pose()
-                    if pose is None:
+                for name, robot in robots:
+                    if robot is None:
                         continue
-                    state = rmf_easy.RobotState(
-                        robot.get_map_name(),
-                        pose,
-                        robot.get_battery_soc(),
-                    )
-                    robot.update(state)
-                except Exception as exc:  # noqa: BLE001 - isolate per robot
-                    _LOGGER.warning('Update failed for robot [%s]: %s',
-                                    name, exc)
+                    try:
+                        pose = robot.get_pose()
+                        if pose is None:
+                            if tick % 20 == 0:
+                                _LOGGER.warning(
+                                    'No pose for robot [%s]; skip RMF state update',
+                                    name,
+                                )
+                            continue
+                        state = rmf_easy.RobotState(
+                            robot.get_map_name(),
+                            pose,
+                            robot.get_battery_soc(),
+                        )
+                        robot.update(state)
+                        if tick % 50 == 0:
+                            _LOGGER.info(
+                                'State update ok [%s] pose=(%.2f, %.2f, %.2f)',
+                                name, pose[0], pose[1], pose[2],
+                            )
+                    except Exception as exc:  # noqa: BLE001 - isolate per robot
+                        _LOGGER.warning(
+                            'Update failed for robot [%s]: %s', name, exc
+                        )
 
-            if self.cfg.post_state and robots:
-                wall_now = time.monotonic()
-                if wall_now - last_state_post \
-                        >= self.cfg.state_post_interval_sec:
-                    last_state_post = wall_now
-                    self._post_states(robots)
+                if self.cfg.post_state and robots:
+                    wall_now = time.monotonic()
+                    if wall_now - last_state_post \
+                            >= self.cfg.state_post_interval_sec:
+                        last_state_post = wall_now
+                        self._post_states(robots)
 
-            next_wakeup = now + Duration(nanoseconds=update_period * 1e9)
-            while self.node.get_clock().now() < next_wakeup:
-                time.sleep(0.001)
+                # Wall-clock sleep — do not busy-wait on ROS clock (can stall
+                # if the command-handle node is blocked inside add_robot).
+                time.sleep(update_period)
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.exception('state update loop error: %s', exc)
+                time.sleep(1.0)
 
     def _post_states(self, robots):
         """Best-effort robot state snapshots back to the Platform API."""
@@ -395,6 +484,11 @@ class NavProFleetAdapter:
         update_thread.start()
 
         try:
+            # Nav2RobotAdapter.__init__ calls spin_until_future_complete on
+            # self.node. That fails with "Executor is already spinning" if a
+            # MultiThreadedExecutor owns the node — so only use spin_once here.
+            # LocalNav2 pose callbacks run on a dedicated pose-thread node;
+            # rmf_nav_status uses the same spin_once loop.
             while rclpy.ok():
                 try:
                     robot_name = self._pending_add.get_nowait()
@@ -402,7 +496,9 @@ class NavProFleetAdapter:
                     robot_name = None
                 if robot_name is not None:
                     self._add_robot(robot_name)
-                rclpy.spin_once(self.node, timeout_sec=0.1)
+                # C++ node is spun on a dedicated thread (spin_rclcpp). Do not
+                # also spin_some here — dual-spin on one rclcpp node is unsafe.
+                rclpy.spin_once(self.node, timeout_sec=0.05)
         except KeyboardInterrupt:
             pass
         finally:

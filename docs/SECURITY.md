@@ -8,7 +8,7 @@ to cloud/multi-site later.
 ## TLS
 
 - nginx terminates HTTPS/WSS for GUI, Platform API, Grafana, and Loki push.
-- `scripts/gen_certs.sh` creates a self-signed cert with the LAN IP in the SAN;
+- `scripts/ops/gen_certs.sh` creates a self-signed cert with the LAN IP in the SAN;
   replace with CA-issued certs by swapping `nginx/certs/server.{crt,key}`.
 - Internal service traffic stays on the private Docker bridge network.
 

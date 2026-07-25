@@ -1,7 +1,7 @@
 import 'react-grid-layout/css/styles.css';
 import './no-rgl-animations.css';
 
-import { styled } from '@mui/material';
+import { Box, styled } from '@mui/material';
 import React from 'react';
 import { default as GridLayout_, Layout as WindowLayout, WidthProvider } from 'react-grid-layout';
 
@@ -14,6 +14,8 @@ const GridLayout = WidthProvider(GridLayout_);
 // a fixed margin for now.
 /** Tight gap between map/table windows — modern dense operator layout. */
 const MARGIN = 6;
+const DEFAULT_ROW_HEIGHT = 150;
+const MIN_ROW_HEIGHT = 48;
 
 export type WindowContainerProps = React.PropsWithChildren<{
   /**
@@ -32,6 +34,10 @@ export type WindowContainerProps = React.PropsWithChildren<{
   onLayoutChange?: (newLayout: WindowLayout[]) => void;
 }>;
 
+function maxGridRows(layout: WindowLayout[]): number {
+  return layout.reduce((max, item) => Math.max(max, item.y + item.h), 12);
+}
+
 /**
  * A resizable and draggable grid layout based on react-grid-layout. By default, the layout
  * follows material-ui convention of 12 columns and rows.
@@ -43,6 +49,9 @@ export const WindowContainer: React.FC<WindowContainerProps> = ({
   onLayoutChange,
   children,
 }: WindowContainerProps) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [rowHeight, setRowHeight] = React.useState(DEFAULT_ROW_HEIGHT);
+
   const windowManagerState = React.useMemo(
     () => ({
       designMode: designMode ?? false,
@@ -50,22 +59,43 @@ export const WindowContainer: React.FC<WindowContainerProps> = ({
     [designMode],
   );
 
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+
+    const updateRowHeight = () => {
+      const rows = maxGridRows(layout);
+      const available = el.clientHeight - MARGIN * (rows + 1);
+      setRowHeight(Math.max(MIN_ROW_HEIGHT, Math.floor(available / rows)));
+    };
+
+    updateRowHeight();
+    const observer = new ResizeObserver(updateRowHeight);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [layout]);
+
   return (
     <WindowManagerStateContext.Provider value={windowManagerState}>
-      <GridLayout
-        layout={layout}
-        margin={[MARGIN, MARGIN]}
-        cols={cols}
-        compactType={null}
-        preventCollision
-        isResizable={designMode}
-        isDraggable={designMode}
-        onLayoutChange={onLayoutChange}
-        draggableCancel=".custom-resize-handle,.window-toolbar-close"
-        resizeHandle={<ResizeHandle className="custom-resize-handle" />}
-      >
-        {children}
-      </GridLayout>
+      <Box ref={containerRef} sx={{ height: '100%', width: '100%', minHeight: 0 }}>
+        <GridLayout
+          layout={layout}
+          margin={[MARGIN, MARGIN]}
+          cols={cols}
+          rowHeight={rowHeight}
+          compactType={null}
+          preventCollision
+          isResizable={designMode}
+          isDraggable={designMode}
+          onLayoutChange={onLayoutChange}
+          draggableCancel=".custom-resize-handle,.window-toolbar-close"
+          resizeHandle={<ResizeHandle className="custom-resize-handle" />}
+        >
+          {children}
+        </GridLayout>
+      </Box>
     </WindowManagerStateContext.Provider>
   );
 };

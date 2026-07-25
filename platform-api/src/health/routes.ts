@@ -7,6 +7,7 @@ import { HttpError, asyncHandler, notFound } from "../http/errors";
 import { verifyToken } from "../auth/jwt";
 import { requireAuth } from "../auth/middleware";
 import { publish } from "../events/bus";
+import { levelOccupancyMeta } from "../site/map-sync";
 
 const HEALTH_TTL_SECONDS = 10;
 const HISTORY_SAMPLE_SECONDS = 10;
@@ -59,7 +60,7 @@ heartbeatRouter.post(
     const ts = new Date().toISOString();
 
     const { rows } = await pool.query(
-      "UPDATE robots SET last_seen = now() WHERE id = $1 RETURNING name, serial",
+      "UPDATE robots SET last_seen = now() WHERE id = $1 RETURNING name, serial, level_id",
       [robotId],
     );
     if (rows[0] === undefined) throw notFound("robot");
@@ -107,7 +108,24 @@ heartbeatRouter.post(
       }
     }
 
-    res.json({ ok: true });
+    // Tell robot which floor map it should hold (auto-claim on connect / change).
+    const levelId =
+      typeof rows[0].level_id === "string" ? (rows[0].level_id as string) : null;
+    let mapMeta: Awaited<ReturnType<typeof levelOccupancyMeta>> = null;
+    if (levelId) {
+      try {
+        mapMeta = await levelOccupancyMeta(levelId);
+      } catch {
+        mapMeta = null;
+      }
+    }
+    res.json({
+      ok: true,
+      levelId,
+      mapName: mapMeta?.mapName ?? "active",
+      mapRevision: mapMeta?.mapRevision ?? null,
+      levelName: mapMeta?.levelName ?? null,
+    });
   }),
 );
 

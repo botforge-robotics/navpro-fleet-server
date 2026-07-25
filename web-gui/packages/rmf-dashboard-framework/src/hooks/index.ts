@@ -6,5 +6,6 @@ export * from './use-create-task-form';
 export * from './use-resources';
 export * from './use-rmf-api';
 export * from './use-settings';
+export * from './use-sim-clock-sync';
 export * from './use-task-registry';
 export * from './use-user-profile';

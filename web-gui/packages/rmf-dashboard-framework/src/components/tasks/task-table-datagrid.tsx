@@ -25,6 +25,12 @@ import {
 import * as React from 'react';
 
 import { TaskBookingLabels } from './booking-label';
+import {
+  formatRmfTime,
+  formatRmfTimeOnly,
+  taskRowId,
+  toWallMillis,
+} from './rmf-time';
 import { getTaskBookingLabelFromTaskState } from './task-booking-label-utils';
 import { parseTaskPriority } from './utils';
 
@@ -89,9 +95,12 @@ function isTaskOutdated(taskState: TaskState): boolean {
     return false;
   }
 
-  const finishDateTime = new Date(taskState.unix_millis_finish_time);
-  const nowDateTime = new Date();
-  return nowDateTime > finishDateTime;
+  // Convert sim finish → wall before comparing to wall "now".
+  const finishWall = toWallMillis(taskState.unix_millis_finish_time);
+  if (finishWall == null) {
+    return false;
+  }
+  return Date.now() > finishWall;
 }
 
 export interface Tasks {
@@ -192,11 +201,7 @@ export function TaskDataGridTable({
         if (!cellValues.row.state.booking.unix_millis_request_time) {
           return 'n/a';
         }
-        const date = new Date(cellValues.row.state.booking.unix_millis_request_time);
-        const day = date.toLocaleDateString(undefined, { day: 'numeric' });
-        const month = date.toLocaleDateString(undefined, { month: 'short' });
-        const year = date.toLocaleDateString(undefined, { year: 'numeric' });
-        return `${day} ${month} ${year}`;
+        return formatRmfTime(cellValues.row.state.booking.unix_millis_request_time);
       },
       flex: 1,
       filterOperators: getMinimalDateOperators,
@@ -271,19 +276,16 @@ export function TaskDataGridTable({
       width: 150,
       editable: false,
       renderCell: (cellValues) => {
-        const startDateTime = cellValues.row.state.unix_millis_start_time
-          ? new Date(cellValues.row.state.unix_millis_start_time)
-          : undefined;
-        const startTimeString = startDateTime ? `${startDateTime.toLocaleTimeString()}` : 'n/a';
+        const startMs = cellValues.row.state.unix_millis_start_time;
         return (
           <Tooltip
             title={
               <Typography variant="caption" noWrap>
-                Start time: {startDateTime ? startDateTime.toLocaleString() : 'n/a'}
+                Start time: {formatRmfTime(startMs)}
               </Typography>
             }
           >
-            <Box>{startTimeString}</Box>
+            <Box>{formatRmfTimeOnly(startMs)}</Box>
           </Tooltip>
         );
       },
@@ -297,32 +299,29 @@ export function TaskDataGridTable({
       width: 150,
       editable: false,
       renderCell: (cellValues) => {
-        let warnDateTime: Date | undefined = undefined;
+        let warnMs: number | undefined = undefined;
         if (cellValues.row.requestLabel && 'unix_millis_warn_time' in cellValues.row.requestLabel) {
           const warnMillisNum = parseInt(cellValues.row.requestLabel.unix_millis_warn_time);
           if (!Number.isNaN(warnMillisNum)) {
-            warnDateTime = new Date(warnMillisNum);
+            warnMs = warnMillisNum;
           }
         }
 
-        const finishDateTime = cellValues.row.state.unix_millis_finish_time
-          ? new Date(cellValues.row.state.unix_millis_finish_time)
-          : undefined;
-        const finishTimeString = finishDateTime ? `${finishDateTime.toLocaleTimeString()}` : 'n/a';
+        const finishMs = cellValues.row.state.unix_millis_finish_time;
         return (
           <Tooltip
             title={
               <React.Fragment>
                 <Typography variant="caption" display="block" noWrap>
-                  Warning time: {warnDateTime ? warnDateTime.toLocaleString() : 'n/a'}
+                  Warning time: {formatRmfTime(warnMs)}
                 </Typography>
                 <Typography variant="caption" noWrap>
-                  Finish time: {finishDateTime ? finishDateTime.toLocaleString() : 'n/a'}
+                  Finish time: {formatRmfTime(finishMs)}
                 </Typography>
               </React.Fragment>
             }
           >
-            <Box>{finishTimeString}</Box>
+            <Box>{formatRmfTimeOnly(finishMs)}</Box>
           </Tooltip>
         );
       },
@@ -389,7 +388,7 @@ export function TaskDataGridTable({
   return (
     <div style={{ height: '100%', width: '100%' }}>
       <StyledDataGrid
-        getRowId={(r) => r.state.booking.id}
+        getRowId={(r) => taskRowId(r.state)}
         rows={taskData}
         rowCount={tasks.total}
         loading={tasks.isLoading}
@@ -431,19 +430,18 @@ export function TaskDataGridTable({
               return classes.taskUnknownCell;
             }
 
-            let warnDateTime: Date | undefined = undefined;
+            let warnMs: number | undefined = undefined;
             if (params.row.requestLabel && 'unix_millis_warn_time' in params.row.requestLabel) {
               const warnMillisNum = parseInt(params.row.requestLabel.unix_millis_warn_time);
               if (!Number.isNaN(warnMillisNum)) {
-                warnDateTime = new Date(warnMillisNum);
+                warnMs = warnMillisNum;
               }
             }
 
-            const finishDateTime = params.row.state.unix_millis_finish_time
-              ? new Date(params.row.state.unix_millis_finish_time)
-              : undefined;
-
-            if (warnDateTime && finishDateTime && finishDateTime > warnDateTime) {
+            const finishMs = params.row.state.unix_millis_finish_time;
+            const finishWall = toWallMillis(finishMs);
+            const warnWall = warnMs != null ? toWallMillis(warnMs) : null;
+            if (warnWall != null && finishWall != null && finishWall > warnWall) {
               return classes.taskLateCell;
             }
           }

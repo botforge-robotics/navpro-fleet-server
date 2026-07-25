@@ -2,11 +2,12 @@ import { Router, type RequestHandler } from "express";
 import { z } from "zod";
 import { pool } from "../db/pool";
 import { asyncHandler, notFound } from "../http/errors";
-import { requireAuth, requireRole, auditMutations } from "../auth/middleware";
+import { requireAuth, requireAuthOrProvisioning, requireRole, auditMutations } from "../auth/middleware";
 import { publish } from "../events/bus";
 import { mapBuilding, mapDevice, mapFleet, mapLevel, mapRobot } from "./mappers";
 import { buildPatch } from "./sql";
 import { registerRouter } from "./register";
+import { pushClaimMapToRobot } from "../site/map-sync";
 
 const mapTransformSchema = z.record(
   z.string(),
@@ -29,6 +30,12 @@ interface CrudSpec {
   map: (row: Record<string, unknown>) => unknown;
   /** Registry changes that feed generated RMF config trigger regeneration. */
   affectsRmfConfig: boolean;
+  /** Optional hook after a successful PATCH (e.g. floor change → claim_map). */
+  onUpdated?: (
+    id: string,
+    body: Record<string, unknown>,
+    row: Record<string, unknown>,
+  ) => Promise<void>;
 }
 
 function crudRouter(spec: CrudSpec): Router {
@@ -84,6 +91,9 @@ function crudRouter(spec: CrudSpec): Router {
       const { rows } = await pool.query(query.text, query.values);
       if (rows[0] === undefined) throw notFound(spec.resource);
       if (spec.affectsRmfConfig) await emitRegistryChanged(spec.resource, req.params.id as string, "updated");
+      if (spec.onUpdated) {
+        await spec.onUpdated(req.params.id as string, body, rows[0] as Record<string, unknown>);
+      }
       res.json(spec.map(rows[0] as Record<string, unknown>));
     }),
   );
@@ -189,6 +199,12 @@ export const robotsCrudRouter = crudRouter({
   jsonColumns: ["battery_spec", "payload", "capabilities", "map_transform"],
   map: mapRobot,
   affectsRmfConfig: true,
+  onUpdated: async (id, body, _row) => {
+    // Floor (re)assignment → pull latest GUI occupancy for that level.
+    if (typeof body.levelId === "string" && body.levelId.length > 0) {
+      await pushClaimMapToRobot(id, body.levelId, "floor_changed");
+    }
+  },
 });
 
 export const fleetsCrudRouter = crudRouter({
@@ -258,7 +274,7 @@ export function registryRouter(): Router {
   // Self-registration authenticates with the provisioning token, not a JWT,
   // so it must be mounted before the requireAuth guard.
   router.use("/robots", registerRouter);
-  router.use("/robots", requireAuth, robotsCrudRouter);
+  router.use("/robots", requireAuthOrProvisioning, robotsCrudRouter);
   router.use("/fleets", requireAuth, fleetsCrudRouter);
   router.use("/levels", requireAuth, levelsCrudRouter);
   router.use("/buildings", requireAuth, buildingsCrudRouter);

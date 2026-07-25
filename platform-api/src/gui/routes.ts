@@ -6,13 +6,15 @@ import { config } from "../config";
 import { pool } from "../db/pool";
 import { cacheRedis } from "../redis";
 import { HttpError, asyncHandler, notFound } from "../http/errors";
-import { requireAuth, requireRole, auditMutations } from "../auth/middleware";
+import { requireAuth, requireAuthOrProvisioning, requireRole, auditMutations } from "../auth/middleware";
 import { publish } from "../events/bus";
 import { isRunnerActive, startMissionRunner } from "../workflows/saga";
 import { fetchGuiRobots } from "./robot-view";
 import { readAlarms } from "./alarms";
 import type { GuiFleet, GuiLevel, GuiServerInfo } from "./types";
 import { ONLINE_SET_KEY } from "../health/routes";
+import { listLevelWaypoints, resolveWaypointPose, rmfPoseToRobotMapPose } from "../site/waypoints";
+import { pushClaimMapToRobot } from "../site/map-sync";
 
 /** GUI compat/aggregation endpoints + read overrides. Mounted before the
  *  generic registry CRUD so the enriched GET shapes shadow the raw ones.
@@ -25,10 +27,23 @@ export function guiRouter(): Router {
 
   router.get(
     "/robots",
-    requireAuth,
-    asyncHandler(async (_req, res) => {
+    requireAuthOrProvisioning,
+    asyncHandler(async (req, res) => {
       const entries = await fetchGuiRobots();
-      res.json(entries.map((e) => e.robot));
+      const fleet = typeof req.query.fleet === "string" ? req.query.fleet : undefined;
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      let robots = entries.map((e) => ({
+        ...e.robot,
+        // Adapter RegistryRobot.from_json reads `fleet`; GUI uses fleetId.
+        fleet: e.fleetName ?? "",
+      }));
+      if (fleet !== undefined) {
+        robots = robots.filter((r) => r.fleet === fleet);
+      }
+      if (status !== undefined) {
+        robots = robots.filter((r) => r.status === status);
+      }
+      res.json(robots);
     }),
   );
 
@@ -59,8 +74,7 @@ export function guiRouter(): Router {
 
   /**
    * Hard remove from the fleet database. If the robot is currently online,
-   * queue a factory-reset command (Redis) so it wipes fleet.yaml / Wi‑Fi and
-   * reboots into the setup hotspot. Offline robots are only deleted server-side.
+   * queue a factory-reset command and wait for ACK (or timeout) before DELETE.
    */
   router.post(
     "/robots/:id/decommission",
@@ -79,15 +93,25 @@ export function guiRouter(): Router {
       const ts = new Date().toISOString();
       const robotName = String(rows[0].name || rows[0].serial);
       await cacheRedis.set(`robot:${robotId}:ros_name`, robotName, "EX", 600);
+      let factoryResetAcked = false;
       if (online) {
+        await cacheRedis.del(`robot:${robotId}:factory_reset_ack`);
         await cacheRedis.set(
           `robot:${robotId}:factory_reset`,
           JSON.stringify({ action: "factory_reset", ts, reason: "decommission" }),
           "EX",
           600,
         );
-        // Give mapping-bridge time to publish ROS /fleet_cmd before DB delete.
-        await new Promise((r) => setTimeout(r, 2500));
+        // Wait up to 15s for Pi ACK before deleting the DB row.
+        const deadline = Date.now() + 15_000;
+        while (Date.now() < deadline) {
+          const ack = await cacheRedis.get(`robot:${robotId}:factory_reset_ack`);
+          if (ack !== null) {
+            factoryResetAcked = true;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 500));
+        }
       }
 
       const del = await pool.query("DELETE FROM robots WHERE id = $1 RETURNING id", [robotId]);
@@ -95,17 +119,21 @@ export function guiRouter(): Router {
 
       await cacheRedis.srem(ONLINE_SET_KEY, robotId);
       const keys = await cacheRedis.keys(`robot:${robotId}:*`);
-      // Keep factory_reset + ros_name so the ROS bridge can still command the Pi.
       const toDelete = keys.filter(
         (k) => !k.endsWith(":factory_reset") && !k.endsWith(":ros_name"),
       );
       if (toDelete.length > 0) await cacheRedis.del(...toDelete);
+
+      // Day-1: bounce rmf-core so EasyFullControl drops the ghost robot.
+      const { touchReloadFlag } = await import("../site/reload");
+      await touchReloadFlag();
 
       await publish("registry.changed", {
         resource: "robot",
         id: robotId,
         action: "decommissioned",
         factoryResetQueued: online,
+        factoryResetAcked,
       });
 
       res.json({
@@ -114,10 +142,30 @@ export function guiRouter(): Router {
         name: rows[0].name,
         serial: rows[0].serial,
         factoryResetQueued: online,
+        factoryResetAcked,
+        reloadRequired: true,
         message: online
-          ? "Removed from fleet database. Robot is online — factory reset queued (hotspot after reboot)."
-          : "Removed from fleet database. Robot was offline — factory reset not sent (wipe the Pi manually if needed).",
+          ? factoryResetAcked
+            ? "Removed. Robot ACKed factory reset (rebooting to hotspot). RMF reload requested."
+            : "Removed. Factory reset queued but ACK timed out — check the Pi. RMF reload requested."
+          : "Removed (robot was offline). Restart rmf-core if the adapter still lists this name.",
       });
+    }),
+  );
+
+  /** Robot ACK after wiping fleet.yaml (before reboot). */
+  router.post(
+    "/robots/:id/factory-reset-ack",
+    requireAuthOrProvisioning,
+    asyncHandler(async (req, res) => {
+      const robotId = req.params.id as string;
+      await cacheRedis.set(
+        `robot:${robotId}:factory_reset_ack`,
+        JSON.stringify({ ts: new Date().toISOString() }),
+        "EX",
+        3600,
+      );
+      res.json({ ok: true });
     }),
   );
 
@@ -128,6 +176,8 @@ export function guiRouter(): Router {
     /** Optional — set later after Building chargers exist. */
     dockWaypoint: z.string().optional(),
     homeWaypoint: z.string().optional(),
+    /** When true and a home/parking waypoint is set, queue start_nav. */
+    startNav: z.boolean().optional(),
   });
 
   /**
@@ -176,8 +226,149 @@ export function guiRouter(): Router {
         await cacheRedis.set(`robot:${robotId}:ros_name`, robotName, "EX", 86400);
       }
       await publish("registry.changed", { resource: "robot", id: robotId, action: "activated" });
+      // Always claim fleet GUI occupancy for the assigned floor (no manual Pi copy).
+      await pushClaimMapToRobot(robotId, body.levelId, "activated");
       const entries = await fetchGuiRobots(robotId);
-      res.json(entries[0]?.robot ?? null);
+      const robot = entries[0]?.robot ?? null;
+
+      // Optional: queue start_nav when parking pose is known and startNav requested.
+      const startNav = body.startNav === true;
+      if (startNav && home) {
+        const rmfPose = await resolveWaypointPose(body.levelId, home);
+        const pose = rmfPose
+          ? await rmfPoseToRobotMapPose(body.levelId, rmfPose)
+          : null;
+        const navPayload = {
+          action: "start_nav",
+          levelId: body.levelId,
+          parkingWaypoint: home,
+          mapName: "active",
+          pose,
+          ts: new Date().toISOString(),
+        };
+        await cacheRedis.set(`robot:${robotId}:fleet_cmd`, JSON.stringify(navPayload), "EX", 3600);
+        await publish("robot.fleet.command", { robotId, ...navPayload });
+      }
+
+      res.json(robot);
+    }),
+  );
+
+  const navSchema = z.object({
+    action: z.enum(["start", "stop", "start_nav", "stop_nav", "set_pose", "initial_pose"]),
+    parkingWaypoint: z.string().optional(),
+    mapName: z.string().optional(),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    yaw: z.number().optional(),
+  });
+
+  router.post(
+    "/robots/:id/nav",
+    requireAuth,
+    requireRole("supervisor"),
+    auditMutations,
+    asyncHandler(async (req, res) => {
+      const robotId = req.params.id as string;
+      const body = navSchema.parse(req.body);
+      const { rows } = await pool.query(
+        "SELECT id, name, serial, level_id, home_waypoint, dock_waypoint FROM robots WHERE id = $1",
+        [robotId],
+      );
+      if (rows[0] === undefined) throw notFound("robot");
+      const row = rows[0] as Record<string, unknown>;
+      const robotName = String(row.name || row.serial);
+      await cacheRedis.set(`robot:${robotId}:ros_name`, robotName, "EX", 86400);
+
+      const levelId = typeof row.level_id === "string" ? row.level_id : null;
+      const parking =
+        (body.parkingWaypoint ??
+          (typeof row.home_waypoint === "string" ? row.home_waypoint : null)) ||
+        (typeof row.dock_waypoint === "string" ? row.dock_waypoint : null);
+
+      // Re-localize AMCL at parking (or explicit x/y/yaw) without restarting Nav2.
+      if (body.action === "set_pose" || body.action === "initial_pose") {
+        let pose: { x: number; y: number; yaw: number } | null = null;
+        if (
+          typeof body.x === "number" &&
+          typeof body.y === "number" &&
+          Number.isFinite(body.x) &&
+          Number.isFinite(body.y)
+        ) {
+          // Explicit x/y are treated as Nav2 map meters (advanced).
+          pose = {
+            x: body.x,
+            y: body.y,
+            yaw: typeof body.yaw === "number" ? body.yaw : 0,
+          };
+        } else if (levelId && parking) {
+          const rmfPose = await resolveWaypointPose(levelId, parking);
+          pose = rmfPose ? await rmfPoseToRobotMapPose(levelId, rmfPose) : null;
+        }
+        if (pose === null) {
+          throw new HttpError(
+            400,
+            "set_pose needs parking/home waypoint or explicit x,y,yaw",
+          );
+        }
+        const payload = {
+          action: "set_pose",
+          levelId,
+          parkingWaypoint: parking,
+          pose,
+          x: pose.x,
+          y: pose.y,
+          yaw: pose.yaw,
+          ts: new Date().toISOString(),
+        };
+        await cacheRedis.set(
+          `robot:${robotId}:fleet_cmd`,
+          JSON.stringify(payload),
+          "EX",
+          3600,
+        );
+        await publish("robot.fleet.command", { robotId, ...payload });
+        res.json({ ok: true, ...payload });
+        return;
+      }
+
+      const action =
+        body.action === "start" || body.action === "start_nav"
+          ? "start_nav"
+          : "stop_nav";
+      let pose: { x: number; y: number; yaw: number } | null = null;
+      if (action === "start_nav" && levelId && parking) {
+        const rmfPose = await resolveWaypointPose(levelId, parking);
+        pose = rmfPose ? await rmfPoseToRobotMapPose(levelId, rmfPose) : null;
+      }
+      const payload = {
+        action,
+        levelId,
+        parkingWaypoint: parking,
+        mapName: body.mapName ?? "active",
+        pose,
+        ts: new Date().toISOString(),
+      };
+      await cacheRedis.set(
+        `robot:${robotId}:fleet_cmd`,
+        JSON.stringify(payload),
+        "EX",
+        3600,
+      );
+      await publish("robot.fleet.command", { robotId, ...payload });
+      res.json({ ok: true, ...payload });
+    }),
+  );
+
+  /** Parking / charger waypoints from nav graph for a level. */
+  router.get(
+    "/levels/:id/waypoints",
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const levelId = req.params.id as string;
+      const parkingOnly = req.query.parking === "1" || req.query.parking === "true";
+      const waypoints = await listLevelWaypoints(levelId, parkingOnly);
+      res.json(waypoints);
     }),
   );
 

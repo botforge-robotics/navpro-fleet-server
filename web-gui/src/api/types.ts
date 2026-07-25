@@ -36,6 +36,9 @@ export interface RobotHealth {
   cpuTempC: number | null;
   batteryTempC: number | null;
   motorFault: boolean;
+  /** On-robot mode_manager: HARDWARE | MAPPING | NAV_READY | NAV_ACTIVE */
+  navMode?: string | null;
+  readyForTasks?: boolean;
 }
 
 export interface RobotPose {

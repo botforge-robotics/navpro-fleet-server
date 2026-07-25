@@ -16,6 +16,8 @@ import {
 import clsx from 'clsx';
 import React from 'react';
 
+import { formatRmfTime, formatRmfTimeOnly } from './rmf-time';
+
 const classes = {
   taskRowHover: 'task-table-taskrow-hover',
   infoRow: 'task-table-info-row',
@@ -113,7 +115,7 @@ function TaskRow({ task, onClick }: TaskRowProps) {
       >
         <TableCell>
           {task.unix_millis_start_time
-            ? new Date(task.unix_millis_start_time).toLocaleDateString()
+            ? formatRmfTime(task.unix_millis_start_time)
             : 'unknown'}
         </TableCell>
         <TableCell>{task.booking.id}</TableCell>
@@ -121,12 +123,12 @@ function TaskRow({ task, onClick }: TaskRowProps) {
         <TableCell>{task.assigned_to ? task.assigned_to.name : 'unknown'}</TableCell>
         <TableCell>
           {task.unix_millis_start_time
-            ? new Date(task.unix_millis_start_time).toLocaleTimeString()
+            ? formatRmfTimeOnly(task.unix_millis_start_time)
             : '-'}
         </TableCell>
         <TableCell>
           {task.unix_millis_finish_time
-            ? new Date(task.unix_millis_finish_time).toLocaleTimeString()
+            ? formatRmfTimeOnly(task.unix_millis_finish_time)
             : '-'}
         </TableCell>
         <TableCell className={taskStateCellClass}>{task.status || 'unknown'}</TableCell>

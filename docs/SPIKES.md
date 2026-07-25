@@ -87,7 +87,8 @@ with our JWT/RBAC so there is exactly ONE auth system?
 TCP port work on a real LAN, or is host networking required?
 
 **Status: design validated on paper; MUST be re-validated with one real robot
-before the first client install.** Run `scripts/spike4_network_check.sh`.
+before the first client install.** Verify zenoh `:7447` and robot topics
+(see `scripts/README.md` / compose health).
 
 Rationale for the chosen default (bridge):
 
@@ -105,7 +106,7 @@ proxies those two via the host gateway address. Everything else stays on bridge.
 
 ## Verification checklist (run before first deployment)
 
-- [ ] `scripts/spike4_network_check.sh` passes with one real robot on the site LAN.
+- [ ] Zenoh router + robot topics healthy on site LAN (see `scripts/README.md`).
 - [ ] Robot N+1 appears in the dashboard without restarting `rmf-core`
       (Spike 1 path, exercised end-to-end).
 - [ ] Login via Platform API, then open an RMF-native dashboard view - no second

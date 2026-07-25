@@ -45,6 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-jazzy-rmf-building-map-tools \
         ros-jazzy-rmf-fleet-msgs \
         ros-jazzy-rmf-task-msgs \
+        ros-jazzy-rmf-visualization-schedule \
         ros-jazzy-tf-transformations \
     && rm -rf /var/lib/apt/lists/*
 

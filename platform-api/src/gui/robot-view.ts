@@ -58,12 +58,20 @@ function toPose(raw: unknown): GuiRobotPose | null {
 function toHealth(raw: Record<string, unknown> | null): GuiRobotHealth | null {
   if (raw === null) return null;
   const extra = raw.extra !== null && typeof raw.extra === "object" ? (raw.extra as Record<string, unknown>) : {};
+  const navMode =
+    typeof extra.nav_mode === "string"
+      ? extra.nav_mode
+      : typeof raw.navMode === "string"
+        ? raw.navMode
+        : null;
   return {
     estop: raw.estop === true,
     wifiRssi: asNumber(raw.wifiRssi),
     cpuTempC: asNumber(raw.temp),
     batteryTempC: asNumber(extra.batteryTempC),
     motorFault: raw.motorFault === true,
+    navMode,
+    readyForTasks: extra.ready_for_tasks === true || navMode === "NAV_READY" || navMode === "NAV_ACTIVE",
   };
 }
 

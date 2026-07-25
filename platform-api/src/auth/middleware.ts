@@ -3,6 +3,7 @@ import { HttpError } from "../http/errors";
 import type { Role } from "../models";
 import { pool } from "../db/pool";
 import { logger, errorFields } from "../logger";
+import { config } from "../config";
 import { verifyToken, type AuthContext } from "./jwt";
 
 declare global {
@@ -40,6 +41,25 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   } catch {
     next(new HttpError(401, "invalid or expired token"));
   }
+}
+
+/**
+ * JWT (browser/GUI) or X-Provisioning-Token (rmf-adapter registry poll).
+ * Write routes still require supervisor via requireRole.
+ */
+export function requireAuthOrProvisioning(req: Request, res: Response, next: NextFunction): void {
+  const prov = req.header("X-Provisioning-Token");
+  if (prov !== undefined && prov === config.provisioningToken) {
+    // Robot / adapter scope only — never grant admin via the site secret.
+    req.auth = {
+      userId: "provisioning",
+      username: "provisioning",
+      roles: ["operator"],
+    };
+    next();
+    return;
+  }
+  requireAuth(req, res, next);
 }
 
 /**

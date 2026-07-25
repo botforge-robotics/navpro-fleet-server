@@ -2,6 +2,7 @@ import {
   Alert,
   AlertProps,
   Box,
+  Button,
   Container,
   CssBaseline,
   Snackbar,
@@ -39,6 +40,7 @@ import AppBar, { APP_BAR_HEIGHT } from './appbar';
 import LocalizationProvider from './locale';
 import { getDefaultTaskDefinition } from './tasks/types';
 import { DashboardThemes } from './theme';
+import { SimClockSync } from '../hooks/use-sim-clock-sync';
 
 const DefaultAlertDuration = 2000;
 
@@ -186,26 +188,58 @@ export function RmfDashboard(props: RmfDashboardProps) {
 
   const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
   const [authReady, setAuthReady] = React.useState(false);
+  const [authError, setAuthError] = React.useState<string | null>(null);
   React.useEffect(() => {
+    let cancelled = false;
     (async () => {
       await authenticator.init();
       if (!authenticator.user) {
+        if (cancelled) return;
         setUserProfile(null);
         setAuthReady(true);
+        // Platform App.tsx owns /login when disableRouter is set.
         return;
       }
-      try {
-        const user = (await rmfApi.defaultApi.getUserUserGet()).data;
-        const perm = (await rmfApi.defaultApi.getEffectivePermissionsPermissionsGet()).data;
-        setUserProfile({ user, permissions: perm });
-      } catch (e) {
-        console.error(e);
-        setUserProfile(null);
-      } finally {
-        setAuthReady(true);
-      }
+      const loadProfile = async (attempt: number): Promise<void> => {
+        try {
+          const user = (await rmfApi.defaultApi.getUserUserGet()).data;
+          const perm = (await rmfApi.defaultApi.getEffectivePermissionsPermissionsGet()).data;
+          if (cancelled) return;
+          setUserProfile({ user, permissions: perm });
+          setAuthError(null);
+        } catch (e) {
+          const status = (e as { response?: { status?: number } })?.response?.status;
+          console.error(e);
+          if (cancelled) return;
+          // Only force re-login on real auth failures. 5xx/network means the
+          // RMF api-server is down — logging out causes a login↔black loop.
+          if (status === 401 || status === 403) {
+            setUserProfile(null);
+            try {
+              await authenticator.logout();
+            } catch {
+              window.location.assign('/login');
+            }
+            return;
+          }
+          if (attempt < 8) {
+            setAuthError(`RMF API not ready (retry ${attempt + 1}/8)…`);
+            await new Promise((r) => window.setTimeout(r, 1500));
+            return loadProfile(attempt + 1);
+          }
+          setAuthError(
+            'RMF API unreachable. Check rmf-api-server / rmf-core, then refresh.',
+          );
+          setUserProfile(null);
+        }
+      };
+      await loadProfile(0);
+      if (!cancelled) setAuthReady(true);
     })();
-  }, [authenticator, rmfApi]);
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticator, rmfApi, props.disableRouter]);
 
   const [settings, setSettings] = React.useState(() => loadSettings());
   const updateSettings = React.useCallback((newSettings: Settings) => {
@@ -249,6 +283,7 @@ export function RmfDashboard(props: RmfDashboardProps) {
               <RmfApiProvider value={rmfApi}>
                 <SettingsProvider value={settings}>
                   <AppControllerProvider value={appController}>
+                    <SimClockSync />
                     <AlertManager alertAudioPath={alertAudioPath} />
                     {props.embeddedContent ?? (
                       <DashboardContents
@@ -289,7 +324,28 @@ export function RmfDashboard(props: RmfDashboardProps) {
   const providers =
     authReady &&
     (props.disableRouter || props.embeddedContent ? (
-      dashboardContent
+      dashboardContent || (
+        <LocalizationProvider>
+          <CssBaseline />
+          <Container maxWidth="sm" sx={{ py: 8, textAlign: 'center' }}>
+            <Typography variant="h5" gutterBottom>
+              {authError ? 'Cannot reach RMF API' : 'Loading dashboard…'}
+            </Typography>
+            <Typography variant="body1" color="textSecondary" gutterBottom>
+              {authError || 'Fetching user profile from the fleet API server.'}
+            </Typography>
+            {authError && (
+              <Button
+                variant="contained"
+                sx={{ mt: 2 }}
+                onClick={() => window.location.reload()}
+              >
+                Retry
+              </Button>
+            )}
+          </Container>
+        </LocalizationProvider>
+      )
     ) : (
       <HashRouter>
         <Routes>

@@ -194,8 +194,9 @@ export function HelpGuideButton(): ReactElement {
                 <li>
                   <h3>Join the robot&apos;s setup Wi‑Fi</h3>
                   <p>
-                    On your phone or laptop, connect to <code>NavPro-Setup-XXXX</code> (unique per
-                    robot). Use the password on the robot screen.
+                    On your phone or laptop, connect to <code>NavPro-Setup-&lt;MAC6&gt;</code> (last
+                    6 hex digits of the robot Wi‑Fi MAC). Password is always{' '}
+                    <code>navprosetup</code> on every robot.
                   </p>
                 </li>
                 <li>
@@ -369,7 +370,8 @@ export function HelpGuideButton(): ReactElement {
                   <tr>
                     <td>2</td>
                     <td>
-                      Join <code>NavPro-Setup-XXXX</code> → <code>http://10.42.0.1/</code>
+                      Join <code>NavPro-Setup-&lt;MAC6&gt;</code> (pw <code>navprosetup</code>) →{' '}
+                      <code>http://10.42.0.1/</code>
                     </td>
                   </tr>
                   <tr>
@@ -492,7 +494,7 @@ export function HelpGuideButton(): ReactElement {
 
               <h3>Quick reference</h3>
               <div className="navpro-help__ref">{`FIRST ROBOT
-Power on → NavPro-Setup-XXXX → http://10.42.0.1/
+Power on → NavPro-Setup-&lt;MAC6&gt; (pw navprosetup) → http://10.42.0.1/
 → site Wi‑Fi + robot name + token + server IP
 → Mapping (SLAM → save → upload)
 → Building (chargers / lanes / floors → Apply to fleet)

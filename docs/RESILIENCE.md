@@ -25,7 +25,7 @@ Dynamic robot ADD needs no reload (docs/SPIKES.md spike 1). For remove/edit:
 
 ## Backups & snapshots
 
-- `scripts/backup.sh` (cron): Postgres dump (platform + rmf_api DBs) and a
+- `scripts/ops/backup.sh` (cron): Postgres dump (platform + rmf_api DBs) and a
   fleet snapshot (site/, compose, configs), 14-generation retention.
 - Restore: fresh PC -> install Docker -> restore `site/` + `.env` + certs ->
   `psql` restore -> `docker compose up -d`.

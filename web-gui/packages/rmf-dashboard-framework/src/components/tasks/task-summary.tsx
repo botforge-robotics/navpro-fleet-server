@@ -20,6 +20,7 @@ import React from 'react';
 
 import { useRmfApi } from '../../hooks';
 import { TaskBookingLabels } from './booking-label';
+import { formatRmfTimeOnly } from './rmf-time';
 import { getTaskBookingLabelFromTaskState } from './task-booking-label-utils';
 import { TaskCancelButton } from './task-cancellation';
 import { TaskInspector } from './task-inspector';
@@ -121,7 +122,7 @@ export const TaskSummary = React.memo((props: TaskSummaryProps) => {
         title: 'Est. end time',
         value:
           taskState && taskState.unix_millis_finish_time
-            ? `${new Date(taskState.unix_millis_finish_time).toLocaleTimeString()}`
+            ? formatRmfTimeOnly(taskState.unix_millis_finish_time)
             : 'n/a',
       },
     ];

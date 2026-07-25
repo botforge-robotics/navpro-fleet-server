@@ -70,9 +70,8 @@ Turn the robot on. Wait about one minute.
 On your phone or laptop:
 
 1. Open Wi‑Fi settings.
-2. Connect to a network named **`NavPro-Setup-XXXX`**  
-   (`XXXX` is unique to that robot).
-3. Use the password shown on the robot screen (or on the setup page).
+2. Connect to **`NavPro-Setup-<MAC6>`** (last 6 hex of robot Wi‑Fi MAC, e.g. `NavPro-Setup-DDEEFF`).
+3. Enter password **`navprosetup`** (same on every robot; also shown on the OLED).
 
 ### Step 3: Open the setup page
 
@@ -128,21 +127,12 @@ One robot drives around and “learns” the walls and open space. That becomes 
 1. **Mapping robot** — choose the robot you will drive around (usually your first one).  
 2. **Start SLAM** — the robot switches into mapping mode (may take ~30 seconds).  
 3. **Drive the robot** slowly through every aisle and room you want it to use later.  
-   Cover the full area; don’t skip corners.  
-   *(Use a hand-held remote, gamepad, or gently push — whatever your site uses.)*  
-4. **Save map** — freezes the map on the robot.  
-5. **Upload to level** — choose the floor (e.g. `L1`).  
-6. **Upload map.pgm + map.yaml** — select both files from your computer and upload.
+4. **Save map** — freezes the map on the robot and **uploads it to the selected floor** on the fleet server automatically.  
+5. **Stop** — ends mapping mode when you are done.
 
-**Getting the map files onto your laptop**
+You should see a success message. Next: draw the **navigation graph** (Part 3) or use **Building → Parking wizard** for quick parking/charger spots.
 
-After **Save map**, the robot stores two files (names may be `slam_session.pgm`
-and `slam_session.yaml`). Copy them to the PC where you use the browser — USB
-stick, shared folder, or ask your installer for the usual method at your site.
-
-7. **Stop** — ends mapping mode when you are done.
-
-You should see a success message. Next: draw the **navigation graph** (Part 3).
+~~USB / laptop copy of map.pgm is no longer required when the robot is online.~~
 
 ---
 
@@ -153,9 +143,19 @@ so robots know where they can drive and where chargers are.
 
 ### Open the **Building** tab
 
-You will see the **traffic editor** — a drawing tool inside the browser.
+Tabs inside Building:
 
-**First time:**
+1. **Mapping** — drive a robot and SLAM the floor (if needed)  
+2. **Map editor** — clean / rotate the occupancy image  
+3. **Parking** — quick wizard to add parking/charger spots (x, y, yaw in meters)  
+4. **Building** — full traffic editor for lanes, doors, lifts  
+
+For day-1 chargers/parking you can use the **Parking** wizard, then open the
+full editor only if you need lanes.
+
+You will see the **traffic editor** on the Building sub-tab — a drawing tool inside the browser.
+
+**First time (full editor):**
 
 1. In the editor menu: **File → New** or **Open** → use `building.yaml` under the site folder if one exists.  
 2. **Add a level** that matches your floor name (e.g. `L1`).  
@@ -165,14 +165,15 @@ You will see the **traffic editor** — a drawing tool inside the browser.
 
 | Thing | How | Why |
 |-------|-----|-----|
-| **Charger / dock** | Place a vertex, name it (e.g. `charger_1`), mark as **charger** | Robot must know where to charge |
+| **Charger / dock** | Parking wizard **or** place a vertex, name it (e.g. `parking1`), mark as **charger** | Robot must know where to charge |
 | **Lanes** | Draw lanes along paths robots should follow | Traffic rules |
 | **Doors / lifts** | Add if your site uses them | Optional automation |
 
 **Save often:** **File → Save** in the editor.
 
-**Apply to fleet:** Back at the top of the Building tab, click **Apply to fleet**.
-Wait for the green success message — this pushes the layout to live robots.
+**Apply to fleet:** On the Building sub-tab click **Apply to fleet**, or use
+**Save & apply** in the Parking wizard. Wait for success — layout is pushed live
+and RMF reloads automatically.
 
 > **Already have a CAD / traffic-editor file?**  
 > Paste a `building.yaml` export into **Import building.yaml** at the bottom of
@@ -182,24 +183,29 @@ Wait for the green success message — this pushes the layout to live robots.
 
 ## Part 4 — Commission the robot (make it “live”)
 
-Commissioning tells the fleet *which floor* this robot is on and *which charger is home*.
+Commissioning activates the robot on the fleet. Parking and Start Nav are set
+per robot afterward (each robot can have a different home).
 
 1. Go to **Devices** → **Robot commissioning**.  
-2. Under **Pending**, click **Commission** on your robot.  
-3. Fill in:
+2. Under **Pending**:
+   - If the site already has a map → click **Commission**
+   - If there is no map yet → click **Claim** (name only), map first, then come back  
+3. On the **Active** row, click **Edit** and set:
 
 | Field | Guidance |
 |-------|----------|
-| **Name** | Keep or adjust the robot name |
-| **Fleet** | Select your fleet |
+| **Fleet** | Select your fleet (usually `navpromini`) |
 | **Level** | The floor you mapped (e.g. `L1`) |
-| **Charger waypoint** | Pick the charger name you drew in the Building editor |
-| **Home waypoint** | Usually the same as the charger |
+| **Home / parking** | Waypoint from Parking wizard or Building editor |
+| **Charger** | Usually the same as home for day-1 |
 
-4. Click **Activate**.
+4. Click **Nav ready** (starts Nav2 + seeds pose at parking).  
+5. Optional: **Set initial pose** again if localization drifts.
 
-Within a few seconds the robot should appear on the **Overview** map with a
-**green “Ready”** style status (robot LED often turns **solid green**).
+The **Nav** column shows on-robot mode (`HARDWARE` / `MAPPING` / `NAV_READY` /
+`NAV_ACTIVE`) and a **task-ready** chip when the robot can take RMF tasks.
+
+Within a few seconds the robot should appear on the **Overview** map.
 
 ---
 
@@ -211,9 +217,9 @@ the server side except commissioning.
 | Step | Action |
 |------|--------|
 | 1 | Power on the next robot |
-| 2 | Join `NavPro-Setup-XXXX`, open `http://10.42.0.1/` |
+| 2 | Join `NavPro-Setup-<MAC6>` (pw `navprosetup`), open `http://10.42.0.1/` |
 | 3 | Use a **new robot name** (`bot-2`, `bot-3`, …) — same token + server IP |
-| 4 | In **Devices → Commissioning**, **Commission** and **Activate** (pick fleet, floor, charger) |
+| 4 | In **Devices → Commissioning**, **Commission** (or **Claim** if no map), then **Edit** + **Nav ready** |
 
 **Same map for all robots on a floor:** You only map once per floor. Additional
 robots use the same occupancy map and building graph; each robot gets its own
@@ -292,7 +298,7 @@ they do not depend on the server to avoid obstacles nearby.
 ```text
 FIRST ROBOT ON A NEW SITE
 ─────────────────────────
-Power on → Wi‑Fi NavPro-Setup-XXXX → http://10.42.0.1/
+Power on → Wi‑Fi NavPro-Setup-&lt;MAC6&gt; (pw navprosetup) → http://10.42.0.1/
 → site Wi‑Fi + robot name + token + server IP
 → GUI: Mapping (SLAM → save → upload)
 → GUI: Building (chargers / lanes / floors → Apply to fleet)

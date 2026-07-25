@@ -72,7 +72,12 @@ export const LayersController = ({
           margin="none"
           value={currentLevel.name}
           size="small"
-          sx={{ width: 96 }}
+          sx={{
+            width: 64,
+            minWidth: 64,
+            '& .MuiInputLabel-root': { fontSize: '0.75rem' },
+            '& .MuiSelect-select': { py: 0.75, fontSize: '0.8125rem' },
+          }}
           onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e, e.target.value as string)}
         >
           {levels.map((level, i) => (

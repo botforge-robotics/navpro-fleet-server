@@ -11,6 +11,7 @@ import {
 import { ApiServerModelsRmfApiRobotStateStatus as Status, Commission } from 'api-client';
 import * as React from 'react';
 
+import { formatRmfTime } from '../tasks/rmf-time';
 import { robotStatusToUpperCase } from './utils';
 
 export interface RobotTableData {
@@ -121,7 +122,7 @@ export function RobotDataGridTable({ onRobotClick, robots }: RobotDataGridTableP
       width: 150,
       editable: false,
       valueGetter: (params: GridValueGetterParams) =>
-        params.row.estFinishTime ? new Date(params.row.estFinishTime).toLocaleString() : '-',
+        params.row.estFinishTime ? formatRmfTime(params.row.estFinishTime) : '-',
       flex: 1,
       filterable: true,
     },
@@ -149,7 +150,7 @@ export function RobotDataGridTable({ onRobotClick, robots }: RobotDataGridTableP
       width: 150,
       editable: false,
       valueGetter: (params: GridValueGetterParams) =>
-        params.row.lastUpdateTime ? new Date(params.row.lastUpdateTime).toLocaleString() : '-',
+        params.row.lastUpdateTime ? formatRmfTime(params.row.lastUpdateTime) : '-',
       flex: 1,
       filterable: true,
     },

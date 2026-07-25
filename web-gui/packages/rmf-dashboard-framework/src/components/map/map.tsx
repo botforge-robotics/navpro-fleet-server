@@ -1,5 +1,4 @@
 import { Box, styled, Typography, useTheme } from '@mui/material';
-import { Line } from '@react-three/drei';
 import { Canvas, useLoader } from '@react-three/fiber';
 import { AlertRequest, BuildingMap, FleetState, Level, Lift } from 'api-client';
 import Debug from 'debug';
@@ -23,7 +22,7 @@ import { LiftSummary } from '../lifts/lift-summary';
 import { getPlaces, Place } from '../place';
 import { RobotSummary } from '../robots/robot-summary';
 import { RobotTableData } from '../robots/robot-table-datagrid';
-import { CameraControl } from './camera-control';
+import { CameraControl, FitCameraOnResize } from './camera-control';
 import { Door } from './door-three';
 import { ReactThreeFiberImageMaker } from './image-maker';
 import { LayersController } from './layers-controller';
@@ -33,17 +32,18 @@ import { RobotThree } from './robot-three';
 import { RobotData } from './robot-three-maker';
 import { ShapeThreeRendering } from './shape-three-rendering';
 import { TextThreeRendering } from './text-maker';
-import { findSceneBoundingBoxFromThreeFiber } from './utils';
+import { TrajectoryThree } from './trajectory-three';
+import { computeFitZoom, findSceneBoundingBoxFromThreeFiber } from './utils';
 import { WallMaker } from './wall-maker';
 
 const debug = Debug('MapApp');
 
-const TrajectoryUpdateInterval = 2000;
+const TrajectoryUpdateInterval = 1000;
 // schedule visualizer manages it's own settings so that it doesn't cause a re-render
 // of the whole app when it changes.
 const colorManager = new ColorManager();
 
-const DEFAULT_ROBOT_SCALE = 0.003;
+const DEFAULT_ROBOT_SCALE = 0.002;
 
 function getRobotId(fleetName: string, robotName: string): string {
   return `${fleetName}/${robotName}`;
@@ -54,18 +54,32 @@ export interface MapProps {
   defaultZoom: number;
   defaultRobotZoom: number;
   attributionPrefix: string;
+  /** Extra buttons in the robot-click summary (e.g. Drive teleop). */
+  renderRobotSummaryActions?: (robot: RobotTableData) => React.ReactNode;
+  /**
+   * When set, robot clicks open this overlay instead of the blocking summary dialog.
+   * Rendered as a sibling of the canvas (map stays interactive).
+   * `location` is live RMF pose [x, y, yaw, map] when known.
+   */
+  renderRobotOverlay?: (
+    robot: RobotTableData,
+    onClose: () => void,
+    location: [number, number, number, string] | null,
+  ) => React.ReactNode;
 }
 
 export const Map = styled((props: MapProps) => {
   const theme = useTheme();
-  const trajectoryColor = theme.palette.success.main;
+  // Match upstream rmf-web / RViz schedule markers (bright green path).
+  const trajectoryColor = '#43a047';
   const authenticator = useAuthenticator();
   const { fleets: fleetResources } = useResources();
   const rmfApi = useRmfApi();
   const { showAlert } = useAppController();
   const [currentLevel, setCurrentLevel] = React.useState<Level | undefined>(undefined);
   const [disabledLayers, setDisabledLayers] = React.useState<Record<string, boolean>>({
-    'Traffic lanes': false,
+    // Always hidden: only green schedule progress is drawn for paths.
+    'Traffic lanes': true,
     Walls: false,
     'Pickup & Dropoff waypoints': false,
     'Pickup & Dropoff labels': true,
@@ -83,6 +97,10 @@ export const Map = styled((props: MapProps) => {
   const [selectedRobot, setSelectedRobot] = React.useState<RobotTableData>();
   const [selectedDoor, setSelectedDoor] = React.useState<DoorModel>();
   const [selectedLift, setSelectedLift] = React.useState<Lift>();
+
+  const renderRobotSummaryActions = props.renderRobotSummaryActions;
+  const renderRobotOverlay = props.renderRobotOverlay;
+  const useOverlay = Boolean(renderRobotOverlay);
 
   const [buildingMap, setBuildingMap] = React.useState<BuildingMap | null>(null);
 
@@ -171,18 +189,22 @@ export const Map = styled((props: MapProps) => {
           loopAnimation: false,
         }));
 
-        // Filter trajectory due to https://github.com/open-rmf/rmf_visualization/issues/65
+        // Drop bogus (0,0) origin knots only:
+        // https://github.com/open-rmf/rmf_visualization/issues/65
+        // Upstream used OR which also stripped real paths that cross x≈0 or y≈0.
         for (const t of trajectories) {
-          if (t.trajectory.segments.length === 0) {
-            continue;
-          }
-
-          const knot = t.trajectory.segments[0];
-          if ((knot.x[0] < 1e-9 && knot.x[0] > -1e-9) || (knot.x[1] < 1e-9 && knot.x[1] > -1e-9)) {
-            t.trajectory.segments.shift();
+          while (t.trajectory.segments.length > 0) {
+            const knot = t.trajectory.segments[0];
+            if (Math.abs(knot.x[0]) < 1e-9 && Math.abs(knot.x[1]) < 1e-9) {
+              t.trajectory.segments.shift();
+            } else {
+              break;
+            }
           }
         }
-        if (!cancel) setTrajectories(trajectories);
+        if (!cancel) {
+          setTrajectories(trajectories.filter((t) => t.trajectory.segments.length >= 2));
+        }
       } catch (e) {
         debug('trajectory update failed: %O', e);
       }
@@ -273,8 +295,13 @@ export const Map = styled((props: MapProps) => {
           const center = newSceneBoundingBox.getCenter(new Vector3());
           const size = newSceneBoundingBox.getSize(new Vector3());
           const distance = Math.max(size.x, size.y, size.z) * 0.7;
-          const newZoom = props.defaultZoom;
+          const canvas = document.querySelector<HTMLCanvasElement>('.map-app-canvas');
+          const newZoom =
+            canvas && newSceneBoundingBox
+              ? computeFitZoom(newSceneBoundingBox, canvas.clientWidth, canvas.clientHeight)
+              : props.defaultZoom;
           AppEvents.resetCamera.next([center.x, center.y, center.z + distance, newZoom]);
+          AppEvents.zoom.next(newZoom);
         }
         setCurrentLevel(currentValue ?? undefined);
         setSceneBoundingBox(newSceneBoundingBox);
@@ -329,9 +356,10 @@ export const Map = styled((props: MapProps) => {
             // no model name
             model: '',
             scale: fleetResource?.default.scale || DEFAULT_ROBOT_SCALE,
-            footprint: 0.5,
+            footprint: 0.3,
             color: await colorManager.robotPrimaryColor(fleetName, r, ''),
-            iconPath: fleetResource?.default.icon || undefined,
+            // Prefer compact live dots over large fleet icon sprites.
+            iconPath: undefined,
           };
         });
       });
@@ -362,7 +390,7 @@ export const Map = styled((props: MapProps) => {
               f.name
                 ? rmfApi
                     .getFleetStateObs(f.name)
-                    .pipe(throttleTime(500, undefined, { leading: true, trailing: true }))
+                    .pipe(throttleTime(100, undefined, { leading: true, trailing: true }))
                 : EMPTY,
             ),
           ),
@@ -555,29 +583,40 @@ export const Map = styled((props: MapProps) => {
           const center = sceneBoundingBox.getCenter(new Vector3());
           const size = sceneBoundingBox.getSize(new Vector3());
           const distance = Math.max(size.x, size.y, size.z) * 0.7;
-          const newZoom = props.defaultZoom;
+          const canvas = document.querySelector<HTMLCanvasElement>('.map-app-canvas');
+          const newZoom = canvas
+            ? computeFitZoom(sceneBoundingBox, canvas.clientWidth, canvas.clientHeight)
+            : props.defaultZoom;
           AppEvents.resetCamera.next([center.x, center.y, center.z + distance, newZoom]);
+          AppEvents.zoom.next(newZoom);
         }}
         handleZoomIn={() => AppEvents.zoomIn.next()}
         handleZoomOut={() => AppEvents.zoomOut.next()}
       />
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: '20px',
-          right: '20px',
-          width: 'auto',
-          height: 'auto',
-          zIndex: '1',
-        }}
-      >
-        <Typography variant="caption" display="block">
-          {props.attributionPrefix}
-        </Typography>
-      </Box>
+      {props.attributionPrefix ? (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: '20px',
+            right: '20px',
+            width: 'auto',
+            height: 'auto',
+            zIndex: '1',
+          }}
+        >
+          <Typography variant="caption" display="block">
+            {props.attributionPrefix}
+          </Typography>
+        </Box>
+      ) : null}
       <Canvas
-        onCreated={({ camera }) => {
+        className="map-app-canvas"
+        style={{ width: '100%', height: '100%', display: 'block' }}
+        onCreated={({ camera, size }) => {
           let sceneBoundingBoxToUse = sceneBoundingBox;
+          if (!sceneBoundingBoxToUse && currentLevel) {
+            sceneBoundingBoxToUse = findSceneBoundingBoxFromThreeFiber(currentLevel);
+          }
           if (!sceneBoundingBoxToUse) {
             const alertRequest: AlertRequest = {
               id: `scene-bounding-${new Date().toLocaleTimeString()}`,
@@ -596,13 +635,18 @@ export const Map = styled((props: MapProps) => {
             sceneBoundingBoxToUse = new Box3(new Vector3(-10, -10, 0), new Vector3(10, 10, 10));
           }
           const center = sceneBoundingBoxToUse.getCenter(new Vector3());
-          camera.position.set(center.x, center.y, center.z + distance);
-          camera.zoom = zoom;
+          const bboxSize = sceneBoundingBoxToUse.getSize(new Vector3());
+          const camDistance = Math.max(bboxSize.x, bboxSize.y, bboxSize.z) * 0.7;
+          const fitZoom = computeFitZoom(sceneBoundingBoxToUse, size.width, size.height);
+          camera.position.set(center.x, center.y, center.z + camDistance);
+          camera.zoom = fitZoom;
           camera.updateProjectionMatrix();
+          AppEvents.zoom.next(fitZoom);
         }}
         orthographic={true}
       >
         <CameraControl zoom={zoom} />
+        {sceneBoundingBox && <FitCameraOnResize sceneBoundingBox={sceneBoundingBox} />}
         {!disabledLayers['Traffic lanes'] && currentLevel.nav_graphs?.length > 0 && (
           <NavGraphMaker graphs={currentLevel.nav_graphs} />
         )}
@@ -743,8 +787,12 @@ export const Map = styled((props: MapProps) => {
                   robot={robot}
                   robotLocation={position}
                   onRobotClick={(_ev, robot) => {
-                    setOpenRobotSummary(true);
                     setSelectedRobot(robot);
+                    if (!useOverlay) {
+                      setOpenRobotSummary(true);
+                    } else {
+                      setOpenRobotSummary(false);
+                    }
                   }}
                   robotLabel={!disabledLayers['Robots labels']}
                 />
@@ -754,17 +802,30 @@ export const Map = styled((props: MapProps) => {
           })}
         {!disabledLayers['Trajectories'] &&
           trajectories.map((trajData) => (
-            <Line
-              key={trajData.trajectory.id}
-              points={trajData.trajectory.segments.map((seg) => new Vector3(seg.x[0], seg.x[1], 4))}
-              color={trajData.color}
-              linewidth={5}
+            <TrajectoryThree
+              key={`${trajData.trajectory.fleet_name}/${trajData.trajectory.robot_name}/${trajData.trajectory.id}`}
+              trajData={trajData}
             />
           ))}
         <ambientLight />
       </Canvas>
-      {openRobotSummary && selectedRobot && (
-        <RobotSummary robot={selectedRobot} onClose={() => setOpenRobotSummary(false)} />
+      {useOverlay && selectedRobot && (() => {
+        // Re-render dock when RMF pose updates (robotLocations is a mutable ref).
+        void locationEpoch;
+        const rid = `${selectedRobot.fleet}/${selectedRobot.name}`;
+        const loc = robotLocations[rid] ?? null;
+        return renderRobotOverlay?.(
+          selectedRobot,
+          () => setSelectedRobot(undefined),
+          loc,
+        );
+      })()}
+      {!useOverlay && openRobotSummary && selectedRobot && (
+        <RobotSummary
+          robot={selectedRobot}
+          onClose={() => setOpenRobotSummary(false)}
+          extraActions={renderRobotSummaryActions?.(selectedRobot)}
+        />
       )}
       {openDoorSummary && selectedDoor && (
         <DoorSummary

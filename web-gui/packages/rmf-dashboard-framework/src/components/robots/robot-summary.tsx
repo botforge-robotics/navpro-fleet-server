@@ -34,6 +34,7 @@ import React from 'react';
 import { combineLatest, EMPTY, mergeMap, of } from 'rxjs';
 
 import { useRmfApi } from '../../hooks';
+import { formatRmfTime } from '../tasks/rmf-time';
 import { TaskCancelButton } from '../tasks/task-cancellation';
 import { TaskInspector } from '../tasks/task-inspector';
 import { RobotDecommissionButton } from './robot-decommission';
@@ -74,6 +75,8 @@ const LinearProgressWithLabel = (props: LinearProgressProps & { value: number })
 interface RobotSummaryProps {
   onClose: () => void;
   robot: RobotTableData;
+  /** Extra action buttons (e.g. platform Drive teleop) shown next to cancel/decommission. */
+  extraActions?: React.ReactNode;
 }
 
 const showBatteryIcon = (robot: RobotState, robotBattery: number) => {
@@ -102,7 +105,7 @@ const showBatteryIcon = (robot: RobotState, robotBattery: number) => {
   return <BatteryUnknown />;
 };
 
-export const RobotSummary = React.memo(({ onClose, robot }: RobotSummaryProps) => {
+export const RobotSummary = React.memo(({ onClose, robot, extraActions }: RobotSummaryProps) => {
   const rmfApi = useRmfApi();
 
   const [isOpen, setIsOpen] = React.useState(true);
@@ -174,7 +177,19 @@ export const RobotSummary = React.memo(({ onClose, robot }: RobotSummaryProps) =
   const theme = useTheme();
 
   const returnDialogContent = () => {
+    const loc = robotState?.location;
+    const locationValue = loc
+      ? `x ${loc.x.toFixed(2)} m · y ${loc.y.toFixed(2)} m · yaw ${(
+          (loc.yaw * 180) /
+          Math.PI
+        ).toFixed(0)}°${loc.map ? ` · ${loc.map}` : ''}`
+      : '—';
+
     const contents = [
+      {
+        title: 'Location',
+        value: locationValue,
+      },
       {
         title: 'Assigned tasks',
         value: taskState ? taskState.booking.id : 'No task',
@@ -182,7 +197,7 @@ export const RobotSummary = React.memo(({ onClose, robot }: RobotSummaryProps) =
       {
         title: 'Est. end time',
         value: taskState?.unix_millis_finish_time
-          ? `${new Date(taskState?.unix_millis_finish_time).toLocaleString()}`
+          ? formatRmfTime(taskState.unix_millis_finish_time)
           : '-',
       },
     ];
@@ -290,7 +305,8 @@ export const RobotSummary = React.memo(({ onClose, robot }: RobotSummaryProps) =
         </>
       )}
       <DialogContent>{returnDialogContent()}</DialogContent>
-      <DialogActions sx={{ justifyContent: 'center' }}>
+      <DialogActions sx={{ justifyContent: 'center', flexWrap: 'wrap', gap: 1 }}>
+        {extraActions}
         <RobotDecommissionButton
           fleet={robot.fleet}
           robotState={robotState}
