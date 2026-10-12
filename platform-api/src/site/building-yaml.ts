@@ -25,11 +25,22 @@ export function graphToBuildingYaml(buildingName: string, graph: BuildingGraph):
     });
     const lanes = graph.lanes
       .filter((lane) => idToIndex.has(lane.fromId) && idToIndex.has(lane.toId))
-      .map((lane) => [
-        idToIndex.get(lane.fromId),
-        idToIndex.get(lane.toId),
-        { bidirectional: [4, lane.bidirectional !== false] },
-      ]);
+      .map((lane) => {
+        const laneAny = lane as Record<string, unknown>;
+        const gIdx = typeof laneAny.graph_idx === "number"
+          ? laneAny.graph_idx
+          : typeof laneAny.graphIdx === "number"
+            ? laneAny.graphIdx
+            : 0;
+        return [
+          idToIndex.get(lane.fromId),
+          idToIndex.get(lane.toId),
+          {
+            bidirectional: [4, lane.bidirectional !== false],
+            graph_idx: [2, gIdx],
+          },
+        ];
+      });
     const doors = graph.doors
       .filter((d) => d.levelName === levelName && idToIndex.has(d.fromId) && idToIndex.has(d.toId))
       .map((d) => [

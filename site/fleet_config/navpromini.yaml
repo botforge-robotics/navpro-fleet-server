@@ -35,10 +35,10 @@ rmf_fleet:
     patrol: true
   transforms: {}
   robots:
-    robot1:
+    navpro1:
       navigation_stack: 2
       initial_map: L1
-      charger: parking1
+      charger: charger_1
       responsive_wait: false
       robot_frame: base_link
       map_frame: map

@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-07-25T09:46:53.546Z",
+  "generatedAt": "2026-10-12T08:55:29.451Z",
   "fleets": [
     {
-      "id": "d602c8e3-c2f5-4f93-ac83-d301af190ef9",
+      "id": "21028631-d2f0-491e-ba0f-704e426c1f8d",
       "name": "navpromini",
       "config": {},
       "status": "active"
@@ -10,40 +10,34 @@
   ],
   "robots": [
     {
-      "id": "4f05d96e-b118-4115-b8e7-4f67b1e2c7ec",
-      "serial": "46884ab7aa441027",
-      "name": "robot1",
-      "fleetId": "d602c8e3-c2f5-4f93-ac83-d301af190ef9",
-      "mac": "d8:3a:dd:c2:cf:e7",
-      "wifiSsid": "manojDivya-5GHZ",
-      "levelId": "f7ad84b0-4ba9-4bc4-a11a-faece3921450",
+      "id": "5a772dc2-1403-4b55-969f-adba2479f535",
+      "serial": "navpro_192_168_0_128",
+      "name": "navpro1",
+      "fleetId": "21028631-d2f0-491e-ba0f-704e426c1f8d",
+      "mac": null,
+      "wifiSsid": null,
+      "levelId": "d21d536a-c812-40fb-a245-96218fdf6e66",
       "batterySpec": {},
       "payload": {},
-      "dockWaypoint": "parking1",
-      "homeWaypoint": "parking1",
+      "dockWaypoint": "charger_1",
+      "homeWaypoint": "charger_1",
       "firmwareVersion": null,
-      "piVersion": "jazzy",
+      "piVersion": null,
       "configVersion": null,
-      "capabilities": [
-        "lidar",
-        "odom",
-        "microros",
-        "mapping",
-        "nav2"
-      ],
+      "capabilities": [],
       "mapTransform": {},
       "status": "active",
-      "lastSeen": "2026-07-25T09:46:52.586Z",
-      "createdAt": "2026-07-24T12:31:44.319Z"
+      "lastSeen": "2026-10-12T08:55:29.314Z",
+      "createdAt": "2026-10-11T19:45:34.166Z"
     }
   ],
   "levels": [
     {
-      "id": "f7ad84b0-4ba9-4bc4-a11a-faece3921450",
+      "id": "d21d536a-c812-40fb-a245-96218fdf6e66",
       "name": "L1",
-      "buildingId": "a04c8da5-3d77-43cd-b26c-3c01a13b6190",
-      "floorplanPath": "maps/L1/floorplan.png",
-      "occupancyMapPath": "maps/L1/map.pgm",
+      "buildingId": "32ac557e-7486-4e1b-a1bd-7b4f643477dd",
+      "floorplanPath": null,
+      "occupancyMapPath": null,
       "navGraphIndex": 0,
       "elevation": 0,
       "metersPerPixel": 0.05,
@@ -53,15 +47,162 @@
   ],
   "buildings": [
     {
-      "id": "a04c8da5-3d77-43cd-b26c-3c01a13b6190",
+      "id": "32ac557e-7486-4e1b-a1bd-7b4f643477dd",
       "name": "site",
       "meta": {
         "source": "traffic-editor",
-        "appliedAt": "2026-07-25T09:46:52.331Z"
+        "appliedAt": "2026-10-12T08:55:28.242Z"
       },
       "graph": {
-        "waypoints": [],
-        "lanes": [],
+        "waypoints": [
+          {
+            "x": 0,
+            "y": 0,
+            "id": "v_1791795241728",
+            "name": "wp_1",
+            "levelName": "L1",
+            "is_charger": true,
+            "is_parking": false,
+            "standoff_x": 0.6910590983629388,
+            "standoff_y": 0.11152274462997218,
+            "standoff_angle": 0.16,
+            "is_holding_point": false
+          },
+          {
+            "x": 1,
+            "y": 0.17,
+            "id": "v_1791795246392",
+            "name": "office",
+            "levelName": "L1",
+            "is_charger": false,
+            "is_parking": true,
+            "is_holding_point": false
+          },
+          {
+            "x": 1.43,
+            "y": 0.76,
+            "id": "v_1791795248137",
+            "name": "wp_3",
+            "levelName": "L1",
+            "is_charger": false,
+            "is_parking": false,
+            "is_holding_point": false
+          },
+          {
+            "x": 0.87,
+            "y": 3.37,
+            "id": "v_1791795251061",
+            "name": "hall",
+            "levelName": "L1",
+            "is_charger": false,
+            "is_parking": true,
+            "is_holding_point": false
+          },
+          {
+            "x": 2.22,
+            "y": 3.92,
+            "id": "v_1791795252212",
+            "name": "tv",
+            "levelName": "L1",
+            "is_charger": false,
+            "is_parking": true,
+            "is_holding_point": false
+          },
+          {
+            "x": 2.47,
+            "y": 5.28,
+            "id": "v_1791795253140",
+            "name": "sofa",
+            "levelName": "L1",
+            "is_charger": false,
+            "is_parking": true,
+            "is_holding_point": false
+          },
+          {
+            "x": 3.75,
+            "y": 4.41,
+            "id": "v_1791795254066",
+            "name": "mainDoor",
+            "levelName": "L1",
+            "is_charger": false,
+            "is_parking": false,
+            "is_holding_point": false
+          }
+        ],
+        "lanes": [
+          {
+            "id": "lane_1791795258458",
+            "toId": "v_1791795252212",
+            "width": 0.4,
+            "fromId": "v_1791795254066",
+            "end_idx": "v_1791795252212",
+            "graph_idx": 0,
+            "start_idx": "v_1791795254066",
+            "speed_limit": 0,
+            "bidirectional": true,
+            "orientation_constraint": 0
+          },
+          {
+            "id": "lane_1791795260509",
+            "toId": "v_1791795253140",
+            "width": 0.4,
+            "fromId": "v_1791795252212",
+            "end_idx": "v_1791795253140",
+            "graph_idx": 0,
+            "start_idx": "v_1791795252212",
+            "speed_limit": 0,
+            "bidirectional": true,
+            "orientation_constraint": 0
+          },
+          {
+            "id": "lane_1791795262863",
+            "toId": "v_1791795251061",
+            "width": 0.4,
+            "fromId": "v_1791795252212",
+            "end_idx": "v_1791795251061",
+            "graph_idx": 0,
+            "start_idx": "v_1791795252212",
+            "speed_limit": 0,
+            "bidirectional": true,
+            "orientation_constraint": 0
+          },
+          {
+            "id": "lane_1791795266365",
+            "toId": "v_1791795248137",
+            "width": 0.4,
+            "fromId": "v_1791795251061",
+            "end_idx": "v_1791795248137",
+            "graph_idx": 0,
+            "start_idx": "v_1791795251061",
+            "speed_limit": 0,
+            "bidirectional": true,
+            "orientation_constraint": 0
+          },
+          {
+            "id": "lane_1791795268318",
+            "toId": "v_1791795246392",
+            "width": 0.4,
+            "fromId": "v_1791795248137",
+            "end_idx": "v_1791795246392",
+            "graph_idx": 0,
+            "start_idx": "v_1791795248137",
+            "speed_limit": 0,
+            "bidirectional": true,
+            "orientation_constraint": 0
+          },
+          {
+            "id": "lane_1791795270625",
+            "toId": "v_1791795241728",
+            "width": 0.4,
+            "fromId": "v_1791795246392",
+            "end_idx": "v_1791795241728",
+            "graph_idx": 0,
+            "start_idx": "v_1791795246392",
+            "speed_limit": 0,
+            "bidirectional": true,
+            "orientation_constraint": 0
+          }
+        ],
         "doors": [],
         "lifts": []
       }

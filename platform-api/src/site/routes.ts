@@ -705,6 +705,29 @@ siteRouter.post(
     } catch {
       /* ignore parse for upsert */
     }
+
+    // Ensure all lanes in building.yaml have graph_idx required by Open-RMF's generate_nav_graph
+    if (parsed.levels !== null && typeof parsed.levels === "object") {
+      let modified = false;
+      for (const lvl of Object.values(parsed.levels as Record<string, unknown>)) {
+        if (lvl !== null && typeof lvl === "object" && Array.isArray((lvl as Record<string, unknown>).lanes)) {
+          const lanesArr = (lvl as Record<string, unknown>).lanes as unknown[];
+          for (const item of lanesArr) {
+            if (Array.isArray(item) && item.length >= 3 && typeof item[2] === "object" && item[2] !== null) {
+              const params = item[2] as Record<string, unknown>;
+              if (!params.graph_idx) {
+                params.graph_idx = [2, 0];
+                modified = true;
+              }
+            }
+          }
+        }
+      }
+      if (modified) {
+        await writeBuildingYamlFiles(yaml.dump(parsed, { noRefs: true, lineWidth: 120 }));
+      }
+    }
+
     const name = typeof parsed.name === "string" ? parsed.name : "site";
     const { rows } = await pool.query(
       `INSERT INTO buildings (name, meta)
