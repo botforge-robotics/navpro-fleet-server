@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Platform API exposes /metrics (basic process + fleet counters).
+  - job_name: platform-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["platform-api:8080"]
+
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]

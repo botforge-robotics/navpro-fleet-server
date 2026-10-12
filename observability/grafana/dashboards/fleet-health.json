@@ -1,0 +1,91 @@
+{
+  "title": "Fleet Health",
+  "uid": "navpro-fleet-health",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Robots online (heartbeat < 15s)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 5 },
+      "datasource": "Postgres (platform)",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT robot_id) AS online FROM health_history WHERE ts > now() - interval '15 seconds'"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Battery SOC per robot",
+      "type": "timeseries",
+      "gridPos": { "x": 6, "y": 0, "w": 18, "h": 8 },
+      "datasource": "Postgres (platform)",
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, robot_id::text AS metric, battery_soc FROM health_history WHERE $__timeFilter(ts) ORDER BY ts"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1, "min": 0 } }
+    },
+    {
+      "id": 3,
+      "title": "WiFi RSSI per robot",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": "Postgres (platform)",
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, robot_id::text AS metric, wifi_rssi FROM health_history WHERE $__timeFilter(ts) ORDER BY ts"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "dBm" } }
+    },
+    {
+      "id": 4,
+      "title": "Pi temperature per robot",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": "Postgres (platform)",
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, robot_id::text AS metric, temp FROM health_history WHERE $__timeFilter(ts) ORDER BY ts"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "celsius" } }
+    },
+    {
+      "id": 5,
+      "title": "E-stop / motor fault events",
+      "type": "table",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": "Postgres (platform)",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT ts, robot_id, estop, motor_fault FROM health_history WHERE (estop OR motor_fault) AND $__timeFilter(ts) ORDER BY ts DESC LIMIT 100"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Mission status (24h)",
+      "type": "table",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": "Postgres (platform)",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT status, count(*) FROM missions WHERE created_at > now() - interval '24 hours' GROUP BY status"
+        }
+      ]
+    }
+  ]
+}

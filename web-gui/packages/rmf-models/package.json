@@ -1,0 +1,15 @@
+{
+  "name": "rmf-models",
+  "version": "0.3.0",
+  "description": "RMF models generated from ROS messages (NavPro first-party copy from open-rmf/rmf-web)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "./lib/index.ts",
+  "types": "./lib/index.ts",
+  "exports": {
+    ".": "./lib/index.ts",
+    "./ros/*": "./lib/ros/*",
+    "./*": "./lib/*"
+  },
+  "files": ["lib/"]
+}

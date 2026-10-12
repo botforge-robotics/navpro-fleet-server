@@ -1,0 +1,87 @@
+// zenoh-bridge-ros2dds ROUTER configuration for the NavPro fleet server.
+//
+// Robots run zenoh-bridge-ros2dds in CLIENT mode and connect here at
+// tcp/<server-ip>:7447. Keep allow-lists in sync with robot zenoh_client.json5.
+{
+  mode: "router",
+
+  listen: {
+    endpoints: ["tcp/0.0.0.0:7447"],
+  },
+  connect: {
+    endpoints: [],
+  },
+
+  // Robots and server clocks are not always within 500ms; do not drop
+  // slightly-future stamped ROS-over-zenoh samples (teleop / map).
+  timestamping: {
+    enabled: true,
+    drop_future_timestamp: false,
+  },
+
+  scouting: {
+    multicast: {
+      enabled: false,
+    },
+    gossip: {
+      enabled: true,
+    },
+  },
+
+  plugins: {
+    ros2dds: {
+      nodename: "navpro_zenoh_router_bridge",
+      domain: 99,
+
+      allow: {
+        publishers: [
+          ".*/amcl_pose",
+          ".*/battery_state",
+          ".*/battery/state",
+          ".*/robot_mode",
+          ".*/tf",
+          ".*/tf_static",
+          ".*/map",
+          ".*/mapping_grid",
+          ".*/odom",
+          ".*/heartbeat",
+          ".*/mapping_status",
+          ".*/mapping_pose",
+          ".*/mapping_scan",
+          "door_states",
+          "door_requests",
+          "fleet_states",
+        ],
+        subscribers: [
+          ".*/mapping_cmd",
+          ".*/fleet_cmd",
+          ".*/fleet_teleop",
+          "door_requests",
+          "adapter_door_requests",
+        ],
+        service_servers: [],
+        service_clients: [],
+        action_servers: [
+          ".*/navigate_to_pose",
+        ],
+        action_clients: [],
+      },
+
+      pub_max_frequencies: [
+        ".*/amcl_pose=5",
+        ".*/tf=10",
+        ".*/tf_static=1",
+        ".*/battery_state=1",
+        ".*/battery/state=1",
+        ".*/robot_mode=2",
+        ".*/odom=5",
+        ".*/map=2",
+        ".*/mapping_grid=2",
+        ".*/heartbeat=1",
+        ".*/mapping_status=2",
+        ".*/mapping_pose=5",
+        ".*/mapping_scan=10",
+      ],
+    },
+  },
+}

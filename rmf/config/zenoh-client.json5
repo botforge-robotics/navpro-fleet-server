@@ -1,0 +1,18 @@
+// Zenoh CLIENT session config used by the fleet adapter (free_fleet_adapter
+// or navpro-rmf-adapter) inside the rmf-core container to reach the
+// zenoh-router container over the compose bridge network.
+//
+// "zenoh-router" is the compose service name; override the whole file with a
+// bind mount (or NAVPRO_ZENOH_CONFIG for the navpro adapter) if the router
+// runs elsewhere.
+{
+  mode: "client",
+  connect: {
+    endpoints: ["tcp/zenoh-router:7447"],
+  },
+  scouting: {
+    multicast: {
+      enabled: false,
+    },
+  },
+}

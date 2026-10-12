@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+    NavPro embed of noVNC for rmf_traffic_editor.
+    Always scales the remote desktop to the iframe (no scrollbars).
+  -->
+  <title>Building editor</title>
+  <meta charset="utf-8">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0f1419;
+    }
+    #screen {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0f1419;
+    }
+    /* noVNC injects a canvas; force it to sit in a flex-centered box when scaled */
+    #screen > div {
+      width: 100% !important;
+      height: 100% !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden !important;
+    }
+    #status {
+      position: absolute;
+      z-index: 2;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: #c5d0dc;
+      font: 13px/1.4 system-ui, sans-serif;
+      pointer-events: none;
+      opacity: 0.9;
+      text-align: center;
+      max-width: 80%;
+    }
+    #status.hidden {
+      display: none;
+    }
+  </style>
+  <script type="module" crossorigin="anonymous">
+    import RFB from './core/rfb.js';
+
+    function readQueryVariable(name, defaultValue) {
+      const re = new RegExp('.*[?&]' + name + '=([^&#]*)');
+      const match = (document.location.href + window.location.hash).match(re);
+      if (match) {
+        return decodeURIComponent(match[1]);
+      }
+      return defaultValue;
+    }
+
+    const statusEl = document.getElementById('status');
+    const screenEl = document.getElementById('screen');
+
+    function status(text, hideWhenConnected) {
+      if (!statusEl) return;
+      statusEl.textContent = text;
+      if (hideWhenConnected) {
+        statusEl.classList.add('hidden');
+      } else {
+        statusEl.classList.remove('hidden');
+      }
+    }
+
+    const host = readQueryVariable('host', window.location.hostname);
+    let port = readQueryVariable('port', window.location.port);
+    const password = readQueryVariable('password');
+    const path = readQueryVariable('path', 'websockify');
+
+    let url = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + host;
+    if (port) url += ':' + port;
+    url += '/' + path;
+
+    const rfb = new RFB(screenEl, url, {
+      credentials: { password: password },
+    });
+
+    function refreshScale() {
+      // Re-apply so layout after iframe flex settle is picked up.
+      rfb.scaleViewport = true;
+    }
+
+    rfb.addEventListener('connect', () => {
+      status('Connected', true);
+      refreshScale();
+      requestAnimationFrame(refreshScale);
+      setTimeout(refreshScale, 100);
+      setTimeout(refreshScale, 500);
+    });
+    rfb.addEventListener('disconnect', (e) => {
+      status(e.detail.clean ? 'Disconnected' : 'Connection closed — reload the editor', false);
+    });
+    rfb.addEventListener('credentialsrequired', () => {
+      const pw = prompt('Password required:');
+      rfb.sendCredentials({ password: pw });
+    });
+
+    rfb.scaleViewport = true;
+    rfb.resizeSession = false;
+    rfb.clipViewport = false;
+    rfb.viewOnly = readQueryVariable('view_only', false) === 'true';
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => refreshScale());
+      ro.observe(screenEl);
+    }
+    window.addEventListener('resize', refreshScale);
+  </script>
+</head>
+<body>
+  <div id="status">Connecting to traffic-editor…</div>
+  <div id="screen"></div>
+</body>
+</html>

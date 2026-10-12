@@ -1,0 +1,9 @@
+NavPro Fleet GUI includes code derived from Open-RMF rmf-web
+(https://github.com/open-rmf/rmf-web), Copyright Open Source Robotics Foundation
+and contributors. Licensed under the Apache License, Version 2.0.
+See packages/LICENSE-Apache-2.0.md.
+
+Owned first-party copies live under packages/:
+  - packages/rmf-dashboard-framework
+  - packages/api-client
+  - packages/rmf-models

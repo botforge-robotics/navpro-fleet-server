@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-07-25T09:46:53.546Z",
+  "fleets": [
+    {
+      "id": "d602c8e3-c2f5-4f93-ac83-d301af190ef9",
+      "name": "navpromini",
+      "config": {},
+      "status": "active"
+    }
+  ],
+  "robots": [
+    {
+      "id": "4f05d96e-b118-4115-b8e7-4f67b1e2c7ec",
+      "serial": "46884ab7aa441027",
+      "name": "robot1",
+      "fleetId": "d602c8e3-c2f5-4f93-ac83-d301af190ef9",
+      "mac": "d8:3a:dd:c2:cf:e7",
+      "wifiSsid": "manojDivya-5GHZ",
+      "levelId": "f7ad84b0-4ba9-4bc4-a11a-faece3921450",
+      "batterySpec": {},
+      "payload": {},
+      "dockWaypoint": "parking1",
+      "homeWaypoint": "parking1",
+      "firmwareVersion": null,
+      "piVersion": "jazzy",
+      "configVersion": null,
+      "capabilities": [
+        "lidar",
+        "odom",
+        "microros",
+        "mapping",
+        "nav2"
+      ],
+      "mapTransform": {},
+      "status": "active",
+      "lastSeen": "2026-07-25T09:46:52.586Z",
+      "createdAt": "2026-07-24T12:31:44.319Z"
+    }
+  ],
+  "levels": [
+    {
+      "id": "f7ad84b0-4ba9-4bc4-a11a-faece3921450",
+      "name": "L1",
+      "buildingId": "a04c8da5-3d77-43cd-b26c-3c01a13b6190",
+      "floorplanPath": "maps/L1/floorplan.png",
+      "occupancyMapPath": "maps/L1/map.pgm",
+      "navGraphIndex": 0,
+      "elevation": 0,
+      "metersPerPixel": 0.05,
+      "originX": 0,
+      "originY": 0
+    }
+  ],
+  "buildings": [
+    {
+      "id": "a04c8da5-3d77-43cd-b26c-3c01a13b6190",
+      "name": "site",
+      "meta": {
+        "source": "traffic-editor",
+        "appliedAt": "2026-07-25T09:46:52.331Z"
+      },
+      "graph": {
+        "waypoints": [],
+        "lanes": [],
+        "doors": [],
+        "lifts": []
+      }
+    }
+  ],
+  "devices": []
+}

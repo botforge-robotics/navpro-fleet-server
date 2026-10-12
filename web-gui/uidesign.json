@@ -1,0 +1,176 @@
+{
+  "name": "NavPro Fleet Operator Theme",
+  "version": "2.0.0",
+  "defaultMode": "dark",
+  "spacingUnit": 8,
+  "radii": {
+    "control": 12,
+    "button": 12,
+    "card": 18,
+    "dialog": 22,
+    "input": 12,
+    "pill": 999
+  },
+  "motion": {
+    "fast": 150,
+    "normal": 200,
+    "slow": 250
+  },
+  "elevation": {
+    "dark": {
+      "level0": "none",
+      "level1": "0 1px 2px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.03)",
+      "level2": "0 4px 12px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04)",
+      "level3": "0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.05)",
+      "level4": "0 16px 48px rgba(0, 0, 0, 0.48), 0 4px 12px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.06)"
+    },
+    "light": {
+      "level0": "none",
+      "level1": "0 1px 2px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.04)",
+      "level2": "0 4px 12px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(15, 23, 42, 0.05)",
+      "level3": "0 8px 24px rgba(15, 23, 42, 0.1), 0 2px 6px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(15, 23, 42, 0.06)",
+      "level4": "0 16px 48px rgba(15, 23, 42, 0.14), 0 4px 12px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.07)"
+    }
+  },
+  "typography": {
+    "fontFamily": "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    "fontSize": 14,
+    "h1": { "fontSize": "2.25rem", "fontWeight": 700, "lineHeight": 1.2 },
+    "h2": { "fontSize": "1.75rem", "fontWeight": 600, "lineHeight": 1.25 },
+    "h3": { "fontSize": "1.375rem", "fontWeight": 600, "lineHeight": 1.3 },
+    "h4": { "fontSize": "1.125rem", "fontWeight": 600, "lineHeight": 1.35 },
+    "h5": { "fontSize": "1rem", "fontWeight": 600, "lineHeight": 1.4 },
+    "h6": { "fontSize": "0.9375rem", "fontWeight": 600, "lineHeight": 1.45 },
+    "body1": { "fontSize": "0.875rem", "fontWeight": 400, "lineHeight": 1.55 },
+    "body2": { "fontSize": "0.8125rem", "fontWeight": 400, "lineHeight": 1.5 },
+    "caption": { "fontSize": "0.75rem", "fontWeight": 400, "lineHeight": 1.4 },
+    "button": { "fontSize": "0.875rem", "fontWeight": 600, "textTransform": "none" }
+  },
+  "palette": {
+    "dark": {
+      "primary": {
+        "main": "#3B82F6",
+        "light": "#60A5FA",
+        "dark": "#2563EB",
+        "contrastText": "#FFFFFF"
+      },
+      "secondary": {
+        "main": "#34D399",
+        "light": "#6EE7B7",
+        "dark": "#10B981",
+        "contrastText": "#0B0C0F"
+      },
+      "error": {
+        "main": "#F87171",
+        "light": "#FCA5A5",
+        "dark": "#EF4444",
+        "contrastText": "#FFFFFF"
+      },
+      "warning": {
+        "main": "#FBBF24",
+        "light": "#FCD34D",
+        "dark": "#F59E0B",
+        "contrastText": "#0B0C0F"
+      },
+      "info": {
+        "main": "#38BDF8",
+        "light": "#7DD3FC",
+        "dark": "#0EA5E9",
+        "contrastText": "#0B0C0F"
+      },
+      "success": {
+        "main": "#34D399",
+        "light": "#6EE7B7",
+        "dark": "#10B981",
+        "contrastText": "#0B0C0F"
+      },
+      "background": {
+        "default": "#0B0C0F",
+        "paper": "#14151A"
+      },
+      "surface": {
+        "raised": "#1A1B22",
+        "overlay": "#1F2129",
+        "sunken": "#090A0C"
+      },
+      "text": {
+        "primary": "#F4F4F5",
+        "secondary": "#A1A1AA",
+        "disabled": "#52525B",
+        "muted": "#71717A"
+      },
+      "divider": "#2A2D36",
+      "border": "#2A2D36",
+      "map": {
+        "navGraph": "#38BDF8",
+        "trajectory": "#34D399",
+        "labelBackground": "rgba(11, 12, 15, 0.78)"
+      }
+    },
+    "light": {
+      "primary": {
+        "main": "#2563EB",
+        "light": "#3B82F6",
+        "dark": "#1D4ED8",
+        "contrastText": "#FFFFFF"
+      },
+      "secondary": {
+        "main": "#059669",
+        "light": "#10B981",
+        "dark": "#047857",
+        "contrastText": "#FFFFFF"
+      },
+      "error": {
+        "main": "#DC2626",
+        "light": "#EF4444",
+        "dark": "#B91C1C",
+        "contrastText": "#FFFFFF"
+      },
+      "warning": {
+        "main": "#D97706",
+        "light": "#F59E0B",
+        "dark": "#B45309",
+        "contrastText": "#FFFFFF"
+      },
+      "info": {
+        "main": "#0284C7",
+        "light": "#0EA5E9",
+        "dark": "#0369A1",
+        "contrastText": "#FFFFFF"
+      },
+      "success": {
+        "main": "#059669",
+        "light": "#10B981",
+        "dark": "#047857",
+        "contrastText": "#FFFFFF"
+      },
+      "background": {
+        "default": "#F8FAFC",
+        "paper": "#FFFFFF"
+      },
+      "surface": {
+        "raised": "#FFFFFF",
+        "overlay": "#F1F5F9",
+        "sunken": "#F1F5F9"
+      },
+      "text": {
+        "primary": "#0F172A",
+        "secondary": "#475569",
+        "disabled": "#94A3B8",
+        "muted": "#64748B"
+      },
+      "divider": "#E2E8F0",
+      "border": "#E2E8F0",
+      "map": {
+        "navGraph": "#0284C7",
+        "trajectory": "#059669",
+        "labelBackground": "rgba(248, 250, 252, 0.88)"
+      }
+    }
+  },
+  "operator": {
+    "touchTargetMinPx": 44,
+    "staleAfterSeconds": 5,
+    "headerHeightPx": 56
+  }
+}

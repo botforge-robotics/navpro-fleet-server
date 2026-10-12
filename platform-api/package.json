@@ -1,0 +1,40 @@
+{
+  "name": "@navpro/platform-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NavPro fleet-management Platform API: registry, workflows/saga, config generation, health, devices, OTA, and RMF-compatible proxy.",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc && npm run copy:migrations",
+    "copy:migrations": "mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test:contract": "node test/contract-boundary.test.mjs",
+    "ci": "npm run typecheck && npm run test:contract"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3",
+    "express": "4.19.2",
+    "http-proxy-middleware": "2.0.6",
+    "ioredis": "5.4.1",
+    "js-yaml": "4.1.0",
+    "jsonwebtoken": "9.0.2",
+    "mqtt": "^5.10.1",
+    "pg": "8.12.0",
+    "ws": "8.18.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "2.4.6",
+    "@types/express": "4.17.21",
+    "@types/js-yaml": "4.0.9",
+    "@types/jsonwebtoken": "9.0.6",
+    "@types/node": "22.5.0",
+    "@types/pg": "8.11.6",
+    "@types/ws": "8.5.12",
+    "typescript": "5.5.4"
+  }
+}
